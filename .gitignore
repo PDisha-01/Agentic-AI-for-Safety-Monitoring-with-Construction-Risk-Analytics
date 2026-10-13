@@ -4,3 +4,19 @@ __pycache__/
 .env
 .streamlit/secrets.toml
 .pytest_cache/
+
+# Node.js dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output
+dist/
+frontend/dist/
+
+# Node.js dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output
+dist/
+frontend/dist/
