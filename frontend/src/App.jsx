@@ -44,10 +44,57 @@ export default function App() {
   const [active, setActive] = useState('Overview')
   const [search, setSearch] = useState('')
   const [mobileMenu, setMobileMenu] = useState(false)
+  const [siteImage, setSiteImage] = useState(null)
+  const [hazardSeverity, setHazardSeverity] = useState('4')
+  const [likelihood, setLikelihood] = useState('3')
+  const [workerExposure, setWorkerExposure] = useState('4')
+  const [safetyCompliance, setSafetyCompliance] = useState('2')
+  const [analysisResult, setAnalysisResult] = useState(null)
+  const [analysisError, setAnalysisError] = useState('')
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
 
-  const nav = [
-    { label: 'Overview', icon: LayoutDashboard },
-    { label: 'Site Monitoring', icon: HardHat },
+  async function handleAnalyzeImage(event) {
+    event.preventDefault()
+    setAnalysisError('')
+    setAnalysisResult(null)
+
+    if (!siteImage) {
+      setAnalysisError('Please choose a site image first.')
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', siteImage)
+    formData.append('hazard_severity', hazardSeverity)
+    formData.append('likelihood', likelihood)
+    formData.append('worker_exposure', workerExposure)
+    formData.append('safety_compliance', safetyCompliance)
+
+    setIsAnalyzing(true)
+    try {
+      const response = await fetch('http://127.0.0.1:8000/analyze', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.detail || 'Image analysis failed. Please try again.')
+      }
+      setAnalysisResult(data)
+    } catch (error) {
+      setAnalysisError(
+        error.message === 'Failed to fetch'
+          ? 'Could not connect to FastAPI. Make sure the backend is running at http://127.0.0.1:8000.'
+          : error.message || 'Something went wrong during analysis.'
+      )
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+    const nav = [
+      { label: 'Overview', icon: LayoutDashboard },
+      { label: 'Site Monitoring', icon: HardHat },
     { label: 'Risk Analytics', icon: Activity },
     { label: 'Incidents', icon: AlertTriangle },
     { label: 'Compliance', icon: ClipboardCheck },
@@ -125,6 +172,119 @@ export default function App() {
                 <p className="mt-2 text-xs text-slate-500">{note}</p>
               </article>
             ))}
+          </section>
+
+          <section className="rounded-2xl border border-emerald-500/20 bg-slate-900 p-5 md:p-6">
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">Live backend feature</p>
+              <h3 className="mt-2 text-xl font-bold">Construction Site Image Analysis</h3>
+              <p className="mt-1 text-sm text-slate-400">Upload an image to run object detection and calculate a risk score using the connected FastAPI service.</p>
+            </div>
+
+            <form onSubmit={handleAnalyzeImage} className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-slate-300">
+                  Site image (JPEG, PNG, or WebP)
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    onChange={(event) => {
+                      setSiteImage(event.target.files?.[0] || null)
+                      setAnalysisResult(null)
+                      setAnalysisError('')
+                    }}
+                    className="mt-2 block w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-400/15 file:px-3 file:py-2 file:font-semibold file:text-emerald-300"
+                  />
+                </label>
+                {siteImage && <p className="text-xs text-slate-400">Selected: {siteImage.name} ({Math.max(1, Math.round(siteImage.size / 1024))} KB)</p>}
+                <p className="text-xs leading-5 text-amber-300">Risk inputs are supplied by the user; this model does not infer construction hazards or PPE compliance from the image.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {[
+                  { label: 'Hazard severity (1–5)', value: hazardSeverity, setter: setHazardSeverity },
+                  { label: 'Likelihood (1–5)', value: likelihood, setter: setLikelihood },
+                  { label: 'Worker exposure (1–5)', value: workerExposure, setter: setWorkerExposure },
+                  { label: 'Safety compliance (1–5)', value: safetyCompliance, setter: setSafetyCompliance },
+                ].map(({ label, value, setter }) => (
+                  <label key={label} className="text-sm text-slate-300">
+                    {label}
+                    <select
+                      value={value}
+                      onChange={(event) => setter(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-slate-100 outline-none focus:border-emerald-400"
+                    >
+                      {[1, 2, 3, 4, 5].map((number) => <option key={number} value={number}>{number}</option>)}
+                    </select>
+                  </label>
+                ))}
+                <button
+                  type="submit"
+                  disabled={isAnalyzing}
+                  className="mt-1 rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
+                >
+                  {isAnalyzing ? 'Analyzing image…' : 'Analyze Site Image'}
+                </button>
+              </div>
+            </form>
+
+            {analysisError && (
+              <div role="alert" className="mt-5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                {analysisError}
+              </div>
+            )}
+
+            {analysisResult && (
+              <div className="mt-6 space-y-5 border-t border-slate-800 pt-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl bg-slate-950 p-4">
+                    <p className="text-xs text-slate-400">Objects detected</p>
+                    <p className="mt-2 text-3xl font-bold">{analysisResult.object_count}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-950 p-4">
+                    <p className="text-xs text-slate-400">Risk score</p>
+                    <p className="mt-2 text-3xl font-bold">{analysisResult.risk_assessment.risk_score}<span className="text-base text-slate-500">/100</span></p>
+                  </div>
+                  <div className="rounded-xl bg-slate-950 p-4">
+                    <p className="text-xs text-slate-400">Risk level</p>
+                    <p className={`mt-2 text-2xl font-bold ${analysisResult.risk_assessment.risk_level === 'Critical' ? 'text-rose-300' : analysisResult.risk_assessment.risk_level === 'High' ? 'text-orange-300' : analysisResult.risk_assessment.risk_level === 'Medium' ? 'text-amber-300' : 'text-emerald-300'}`}>{analysisResult.risk_assessment.risk_level}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 p-4">
+                  <h4 className="font-semibold">Risk recommendation</h4>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">{analysisResult.risk_assessment.recommendation}</p>
+                </div>
+
+                <div>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h4 className="font-semibold">Detected objects</h4>
+                    <span className="text-xs text-slate-500">General-purpose YOLO model</span>
+                  </div>
+                  {analysisResult.detected_objects.length === 0 ? (
+                    <p className="rounded-xl bg-slate-950 p-4 text-sm text-slate-400">No objects were detected with the current model confidence threshold.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-slate-800">
+                      <table className="w-full min-w-[500px] text-left text-sm">
+                        <thead className="bg-slate-800/60 text-xs uppercase text-slate-400">
+                          <tr><th className="px-4 py-3">Object</th><th className="px-4 py-3">Confidence</th><th className="px-4 py-3">Bounding box (x1, y1, x2, y2)</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {analysisResult.detected_objects.map((object, index) => (
+                            <tr key={`${object.label}-${index}`}>
+                              <td className="px-4 py-3 font-medium text-slate-200">{object.label}</td>
+                              <td className="px-4 py-3 text-emerald-300">{(object.confidence * 100).toFixed(1)}%</td>
+                              <td className="px-4 py-3 text-slate-400">{object.bbox.map((coordinate) => coordinate.toFixed(1)).join(', ')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs leading-5 text-slate-500">Prototype note: the score is calculated from the four inputs above, not automatically inferred from detected objects. Validate all findings before any real-world safety decision.</p>
+              </div>
+            )}
           </section>
 
           <section className="grid gap-5 xl:grid-cols-3">

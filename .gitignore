@@ -20,3 +20,23 @@ frontend/node_modules/
 # Build output
 dist/
 frontend/dist/
+
+# Python environments and secrets
+.venv-1/
+venv/
+.env.*
+!.env.example
+
+# Local databases and runtime files
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+*.log
+
+# YOLO model weights and generated predictions
+*.pt
+runs/
+*.env
+yolo11n.pt
+bus.jpg
+datasets/construction-ppe/
