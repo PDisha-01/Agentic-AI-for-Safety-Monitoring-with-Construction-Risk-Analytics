@@ -52,6 +52,12 @@ export default function App() {
   const [analysisResult, setAnalysisResult] = useState(null)
   const [analysisError, setAnalysisError] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [agentResult, setAgentResult] = useState(null)
+const [agentError, setAgentError] = useState('')
+const [isAssessing, setIsAssessing] = useState(false)
+const [history, setHistory] = useState([])
+const [historyError, setHistoryError] = useState('')
+const [isLoadingHistory, setIsLoadingHistory] = useState(false)
 
   async function handleAnalyzeImage(event) {
     event.preventDefault()
@@ -91,7 +97,61 @@ export default function App() {
       setIsAnalyzing(false)
     }
   }
+async function handleRiskAssessment(event) {
+  event.preventDefault()
+  setAgentError('')
+  setAgentResult(null)
+  setIsAssessing(true)
 
+  try {
+    const response = await fetch('http://127.0.0.1:8000/assess', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hazard_severity: Number(hazardSeverity),
+        likelihood: Number(likelihood),
+        worker_exposure: Number(workerExposure),
+        safety_compliance: Number(safetyCompliance),
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data.detail || 'Risk assessment failed.')
+    }
+
+    setAgentResult(data)
+    await loadAssessmentHistory()
+  } catch (error) {
+    setAgentError(
+      error.message === 'Failed to fetch'
+        ? 'Cannot connect to the backend. Check that FastAPI is running.'
+        : error.message || 'Risk assessment failed.'
+    )
+  } finally {
+    setIsAssessing(false)
+  }
+}
+
+async function loadAssessmentHistory() {
+  setHistoryError('')
+  setIsLoadingHistory(true)
+
+  try {
+    const response = await fetch('http://127.0.0.1:8000/assessments?limit=20')
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.detail || 'Could not load assessment history.')
+    }
+
+    setHistory(data.assessments || [])
+  } catch (error) {
+    setHistoryError(error.message || 'Could not load assessment history.')
+  } finally {
+    setIsLoadingHistory(false)
+  }
+}
     const nav = [
       { label: 'Overview', icon: LayoutDashboard },
       { label: 'Site Monitoring', icon: HardHat },
@@ -118,21 +178,58 @@ export default function App() {
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">Workspace</p>
         <nav className="space-y-1">
           {nav.map(({ label, icon: Icon }) => (
-            <button key={label} onClick={() => { setActive(label); setMobileMenu(false) }}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition ${active === label ? 'bg-emerald-400/10 font-semibold text-emerald-300' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-              <Icon size={18} /> {label}
-            </button>
+            
+<button
+  key={label}
+  onClick={() => {
+    setActive(label)
+    setMobileMenu(false)
+
+    const targets = {
+      Overview: 'dashboard-overview',
+      'Site Monitoring': 'site-monitoring',
+      'Risk Analytics': 'risk-analytics',
+      Incidents: 'incidents',
+      Compliance: 'compliance',
+      'AI Agents': 'ai-agents',
+    }
+
+    const targetId = targets[label]
+
+    if (targetId) {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
+  }}
+  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition ${
+    active === label
+      ? 'bg-emerald-400/10 font-semibold text-emerald-300'
+      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+  }`}
+>
+  <Icon size={18} /> {label}
+</button>
           ))}
         </nav>
-        <div className="mt-10 rounded-2xl border border-slate-700 bg-slate-800/60 p-4">
-          <div className="mb-2 flex items-center gap-2 text-emerald-300"><Bot size={18} /><span className="text-sm font-semibold">AI Safety Agent</span></div>
-          <p className="text-xs leading-5 text-slate-400">Demo mode is active. Risk insights use sample data until the backend is connected.</p>
-          <span className="mt-3 inline-flex items-center gap-2 text-xs text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-400" /> Interface online</span>
-        </div>
-        <button onClick={() => setActive('Settings')} className="mt-6 flex items-center gap-3 px-3 py-2 text-sm text-slate-400 hover:text-white"><Settings size={18} /> Settings</button>
+        <button
+  onClick={() => {
+    setActive('Settings')
+    document.getElementById('compliance')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }}
+  className="mt-6 flex items-center gap-3 px-3 py-2 text-sm text-slate-400 hover:text-white"
+>
+<Settings size={18} /> Settings</button>
       </aside>
 
-      <main className="min-w-0 flex-1">
+     <main
+  id="dashboard-overview"
+  className="scroll-mt-24 min-w-0 flex-1"
+>
         <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 bg-slate-950/90 px-5 py-4 backdrop-blur md:px-8">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenu(!mobileMenu)} className="rounded-lg p-2 hover:bg-slate-800 md:hidden" aria-label="Toggle menu"><Menu size={20} /></button>
@@ -174,7 +271,10 @@ export default function App() {
             ))}
           </section>
 
-          <section className="rounded-2xl border border-emerald-500/20 bg-slate-900 p-5 md:p-6">
+          <section
+  id="site-monitoring"
+  className="scroll-mt-24 rounded-2xl border border-emerald-500/20 bg-slate-900 p-5 md:p-6"
+>
             <div className="mb-5">
               <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">Live backend feature</p>
               <h3 className="mt-2 text-xl font-bold">Construction Site Image Analysis</h3>
@@ -285,6 +385,132 @@ export default function App() {
                 <p className="text-xs leading-5 text-slate-500">Prototype note: the score is calculated from the four inputs above, not automatically inferred from detected objects. Validate all findings before any real-world safety decision.</p>
               </div>
             )}
+          </section>
+
+          {/* Site Risk Agent Assessment */}
+          <section className="rounded-2xl border border-sky-500/20 bg-slate-900 p-5 md:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-sky-300">
+                  LangGraph workflow
+                </p>
+                <h3 className="mt-2 text-xl font-bold">Site Risk Agent</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Calculate a site risk score and save the assessment to the database.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={loadAssessmentHistory}
+                disabled={isLoadingHistory}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              >
+                {isLoadingHistory ? 'Loading...' : 'Refresh History'}
+              </button>
+            </div>
+
+            <form onSubmit={handleRiskAssessment} className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: 'Hazard Severity', value: hazardSeverity, setter: setHazardSeverity },
+                { label: 'Likelihood', value: likelihood, setter: setLikelihood },
+                { label: 'Worker Exposure', value: workerExposure, setter: setWorkerExposure },
+                { label: 'Safety Compliance', value: safetyCompliance, setter: setSafetyCompliance },
+              ].map(({ label, value, setter }) => (
+                <label key={label} className="text-sm text-slate-300">
+                  {label} (1–5)
+                  <select
+                    value={value}
+                    onChange={(event) => setter(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-slate-100"
+                  >
+                    {[1, 2, 3, 4, 5].map((number) => (
+                      <option key={number} value={number}>{number}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+
+              <button
+                type="submit"
+                disabled={isAssessing}
+                className="rounded-xl bg-sky-400 px-4 py-3 font-semibold text-slate-950 hover:bg-sky-300 disabled:opacity-50 sm:col-span-2 lg:col-span-4"
+              >
+                {isAssessing ? 'Assessing...' : 'Run Site Risk Agent'}
+              </button>
+            </form>
+
+            {agentError && (
+              <p role="alert" className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+                {agentError}
+              </p>
+            )}
+
+            {agentResult && (
+              <div className="mt-5 rounded-xl border border-slate-700 bg-slate-950 p-5">
+                <p className="text-sm text-slate-400">
+                  Assessment #{agentResult.id ?? 'completed'}
+                </p>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-sm text-slate-400">Risk Score</p>
+                    <p className="mt-1 text-3xl font-bold">
+                      {agentResult.risk_score}<span className="text-base text-slate-500">/100</span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-400">Risk Level</p>
+                    <p className="mt-1 text-2xl font-bold text-orange-300">
+                      {agentResult.risk_level}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-slate-300">
+                  {agentResult.recommendation}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6 border-t border-slate-800 pt-5">
+              <h4 className="font-semibold">Saved Assessment History</h4>
+
+              {historyError && (
+                <p role="alert" className="mt-3 text-sm text-rose-300">{historyError}</p>
+              )}
+
+              {!historyError && history.length === 0 && (
+                <p className="mt-3 text-sm text-slate-400">
+                  {isLoadingHistory
+                    ? 'Loading saved assessments...'
+                    : 'Click Refresh History to load saved assessments.'}
+                </p>
+              )}
+
+              {history.length > 0 && (
+                <div className="mt-3 overflow-x-auto rounded-xl border border-slate-800">
+                  <table className="w-full min-w-[600px] text-left text-sm">
+                    <thead className="bg-slate-800/60 text-xs uppercase text-slate-400">
+                      <tr>
+                        <th className="px-4 py-3">ID</th>
+                        <th className="px-4 py-3">Score</th>
+                        <th className="px-4 py-3">Risk Level</th>
+                        <th className="px-4 py-3">Recommendation</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {history.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-4 py-3">{item.id}</td>
+                          <td className="px-4 py-3">{item.risk_score}/100</td>
+                          <td className="px-4 py-3">{item.risk_level}</td>
+                          <td className="px-4 py-3 text-slate-400">{item.recommendation}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="grid gap-5 xl:grid-cols-3">
