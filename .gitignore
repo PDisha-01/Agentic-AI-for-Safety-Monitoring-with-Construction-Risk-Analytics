@@ -40,3 +40,10 @@ runs/
 yolo11n.pt
 bus.jpg
 datasets/construction-ppe/
+
+# Temporary caches
+.matplotlib_cache/
+.ultralytics/
+
+# Dataset archive
+construction-ppe.zip
