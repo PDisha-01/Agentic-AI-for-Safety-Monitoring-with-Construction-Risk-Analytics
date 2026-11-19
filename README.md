@@ -8,6 +8,41 @@ HazardHawk AI is an AI-powered construction safety monitoring and risk analytics
 
 ---
 
+## 🏆 Milestone 3 — Completed: Compliance Agent, Check-to-Evidence Audit & Insurance Exposure
+
+Milestone 3 elevates the platform into an enterprise-grade regulatory and actuarial intelligence system:
+
+### ✨ Key Deliverables Completed
+1. **Compliance Agent & Statutory Checklist Matrix (`src/compliance_agent.py`)**:
+   - Implements formal regulatory checklist anchored to **OSHA 29 CFR 1926** (1926.100 Head Protection, 1926.95 High-Vis, 1926.501 Fall Protection, 1926.651 Trench Excavation) and **ISO 45001:2018**.
+   - Evaluates flagged incidents to generate statutory violation citations, violation severity classifications, and base statutory penalty estimates.
+
+2. **Check-to-Evidence Cryptographic Audit Trail**:
+   - Pairs every statutory rule check with concrete perception evidence (bounding box, confidence score, camera ID, zone, worker ID).
+   - Generates tamper-evident **SHA-256 cryptographic fingerprints** binding raw telemetry to maintain an immutable chain of custody.
+
+3. **Fail-Safe Integrity Recovery Path**:
+   - Detects evidence tampering or sensor desynchronization anomalies (`TAMPER_DETECTED`).
+   - Executes automated 5-step fail-safe protocol: quarantines suspect logs, retrieves secondary edge stream buffer, cross-validates with RFID badge telemetry, recalculates valid SHA-256 digest, and secures dual safety inspector digital sign-off (`AUDIT_RECOVERY_COMPLETE`).
+
+4. **Insurance Agent & Actuarial Exposure Modeling (`src/insurance_agent.py`)**:
+   - Computes multi-factor **Loss Severity Score ($LSS \in [0, 100]$)** and **Total Expected Financial Exposure ($EFE$)**.
+   - Segregates financial reserves: Workers' Comp (medical + indemnity), CGL third-party liability, statutory OSHA fines, legal defense, and jobsite delay losses.
+   - Applies commercial policy layering ($50,000 SIR deductible retention, $5,000,000 primary layer).
+   - Projects **Experience Modification Rate (EMR)** rating impact (e.g., 1.00 $\to$ 1.27) and multi-year cumulative premium hikes.
+
+5. **Claim-Ready First Notice of Loss (FNOL) Dossier Generator**:
+   - Synthesizes formal, underwriter-facing claim packages linking violation citations, cryptographic evidence digests, and actuarial reserves.
+   - Interactive 1-click clipboard copy and PDF/print export in React dashboard.
+
+6. **Official Mentor Review Demonstration (`demo_milestone3.py`)**:
+   - Stated clearly: **INPUT $\to$ PROCESSING $\to$ OUTPUT**.
+   - Showcases flagged incident review, checklist violation detection, actuarial calculation, and claim dossier generation.
+   - Includes full error case and recovery path demonstration.
+   - Features complete sample insurance case study with detailed underwriting assumptions.
+
+---
+
 ## 🏆 Milestone 2 — Completed: Safety Intelligence, Worker Protection & Computer Vision
 
 Milestone 2 transitions the system from a manual prototype into an autonomous, vision-driven safety intelligence platform matching all **BuildSure AI / Mentorship deliverables**:
@@ -103,8 +138,12 @@ Infosys_Construction_Risk_Analytics/
 ├── test_videos/
 │   └── sample_site.mp4             # Sample test video
 │
-├── demo_milestone2.py              # One-click Milestone 2 verification script
+├── demo_milestone3.py              # Official Milestone 3 mentor review runner (Flagged -> Violation -> Claim)
+├── demo_milestone2.py              # Milestone 2 verification script
 ├── evaluate_model.py               # Dataset benchmark & evaluation runner
+├── reports/
+│   ├── Milestone_3_Report.md       # Comprehensive Milestone 3 Dossier & Submission Package
+│   └── Milestone_2_Report.md
 ├── requirements.txt
 └── README.md
 ```
@@ -113,17 +152,19 @@ Infosys_Construction_Risk_Analytics/
 
 ## 🚀 How to Run and Verify
 
-### 1. Run the Milestone 2 Demo Script
+### 1. Run the Milestone 3 Demo Script (Recommended for Mentor Review)
 Execute the complete end-to-end verification script in PowerShell:
 ```powershell
-.\.venv\Scripts\python.exe demo_milestone2.py
+.\.venv\Scripts\python.exe demo_milestone3.py
 ```
+*Demonstrates flagged incident review, checklist violations, claim-ready FNOL dossier, fail-safe tamper recovery, and sample insurance case study.*
 
 ### 2. Start the Backend API
 ```powershell
 .\.venv\Scripts\uvicorn.exe backend.main:app --reload --port 8000
 ```
 - Interactive Swagger API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- Milestone 3 routes: `/compliance/checklist`, `/compliance/audit-trail`, `/claims`, `/demo/milestone3`
 
 ### 3. Start the Frontend Dashboard
 ```powershell
@@ -131,4 +172,6 @@ cd frontend
 npm run dev
 ```
 - Open browser: [http://localhost:5173](http://localhost:5173)
-- Navigate to **Site Monitoring**, upload an image (e.g. `test_images/construction_site_test.png`), and click **Run Automated AI Safety Inspection**.
+- Navigate to **Compliance & Regulations** to inspect the OSHA 1926 checklist matrix and cryptographic audit ledger.
+- Navigate to **Insurance & Claims** to view actuarial exposure calculations, policy layering, and the claim dossier viewer.
+

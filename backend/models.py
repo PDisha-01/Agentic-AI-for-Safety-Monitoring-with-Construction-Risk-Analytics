@@ -100,3 +100,68 @@ class WorkerReport(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+
+class ComplianceCheckRecord(Base):
+    __tablename__ = "compliance_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    incident_id: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    zone_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    worker_id: Mapped[str] = mapped_column(String(100), default="Worker #3", nullable=False)
+    overall_status: Mapped[str] = mapped_column(String(50), default="NON_COMPLIANT", nullable=False)
+    compliance_rate: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    checks_evaluated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    violations_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_statutory_penalty: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    violations_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class AuditEvidenceRecord(Base):
+    __tablename__ = "audit_evidence_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    incident_id: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    check_id: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    standard: Mapped[str] = mapped_column(String(100), nullable=False)
+    zone_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    worker_id: Mapped[str] = mapped_column(String(100), default="Worker #3", nullable=False)
+    evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    verification_status: Mapped[str] = mapped_column(String(50), default="VERIFIED", nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, default=0.95, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class InsuranceClaimRecord(Base):
+    __tablename__ = "insurance_claims"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    claim_id: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    incident_id: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    zone_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    loss_severity_score: Mapped[float] = mapped_column(Float, nullable=False)
+    severity_tier: Mapped[str] = mapped_column(String(50), nullable=False)
+    total_estimated_financial_exposure: Mapped[float] = mapped_column(Float, nullable=False)
+    workers_comp_reserve: Mapped[float] = mapped_column(Float, nullable=False)
+    cgl_third_party_reserve: Mapped[float] = mapped_column(Float, nullable=False)
+    statutory_osha_penalties: Mapped[float] = mapped_column(Float, nullable=False)
+    legal_defense_reserve: Mapped[float] = mapped_column(Float, nullable=False)
+    contractor_retained_loss: Mapped[float] = mapped_column(Float, nullable=False)
+    net_insurer_exposure: Mapped[float] = mapped_column(Float, nullable=False)
+    projected_emr: Mapped[float] = mapped_column(Float, nullable=False)
+    claim_status: Mapped[str] = mapped_column(String(30), default="CLAIM_READY", nullable=False)
+    claim_dossier_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

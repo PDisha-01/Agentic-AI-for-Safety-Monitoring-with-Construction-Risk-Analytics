@@ -18,18 +18,28 @@ from backend.risk_service import (
     authenticate_user,
     create_worker_report,
     get_assessments,
+    get_audit_evidence_trail,
+    get_compliance_records,
+    get_insurance_claim_by_id,
+    get_insurance_claims,
     get_safety_alerts,
     get_worker_reports,
     get_zone_safety_analytics,
     initialize_database,
     register_user,
+    save_audit_evidence_trail,
+    save_compliance_record,
     save_cv_assessment,
+    save_insurance_claim,
     save_safety_alert,
     update_alert_status,
     update_user_profile,
 )
 from detection.cv_visualizer import process_video
 from detection.risk_assessment import analyze_site_image
+from src.compliance_agent import REGULATORY_CHECKLIST, ComplianceAgent
+from src.insurance_agent import DEFAULT_POLICY_ASSUMPTIONS, InsuranceAgent
+from src.milestone3_orchestrator import run_milestone3_pipeline
 from src.safety_agent import ZONE_PROFILES, run_safety_agent
 from src.site_risk_agent import site_risk_agent
 
@@ -585,4 +595,163 @@ async def inspect_safety_feed(
             await file.close()
         if temp_path and temp_path.is_file():
             temp_path.unlink(missing_ok=True)
+
+
+# =========================================================================
+# Milestone 3 Compliance, Audit Trail & Insurance Exposure Endpoints
+# =========================================================================
+
+class Milestone3DemoRequest(BaseModel):
+    scenario: str = Field(default="standard_flagged", description="standard_flagged, error_recovery, or sample_case")
+    zone_name: str = Field(default="Zone B - Perimeter Scaffolding")
+    missing_ppe: Optional[list[str]] = Field(default=None)
+    worker_id: str = Field(default="Worker #3 (Rajeev Sharma)")
+    incident_notes: Optional[str] = None
+
+
+class ComplianceEvaluateRequest(BaseModel):
+    incident_id: Optional[str] = None
+    zone_name: str = "Zone B - Perimeter Scaffolding"
+    missing_ppe: list[str] = ["helmet", "boots"]
+    worker_id: str = "Worker #3"
+
+
+@app.get("/compliance/checklist")
+def get_compliance_checklist(zone: Optional[str] = None):
+    """Retrieve the statutory safety checklist (OSHA 1926 & ISO 45001)."""
+    agent = ComplianceAgent()
+    checklist = agent.get_checklist(zone_filter=zone)
+    recent = get_compliance_records(limit=10)
+    return {
+        "checklist": checklist,
+        "count": len(checklist),
+        "recent_evaluations": recent,
+    }
+
+
+@app.get("/compliance/audit-trail")
+def get_audit_trail(incident_id: Optional[str] = None, limit: int = 50):
+    """Retrieve check-to-evidence audit trail with cryptographic SHA-256 fingerprints."""
+    trail = get_audit_evidence_trail(incident_id=incident_id, limit=limit)
+    return {
+        "audit_trail": trail,
+        "count": len(trail),
+    }
+
+
+@app.post("/compliance/evaluate")
+def evaluate_compliance(request: ComplianceEvaluateRequest):
+    """Evaluate an incident against statutory checklist and persist audit records."""
+    inc_id = request.incident_id or f"INC-{datetime.now(timezone.utc).strftime('%H%M%S')}"
+    agent = ComplianceAgent()
+    eval_result = agent.evaluate_incident(
+        incident_id=inc_id,
+        zone_name=request.zone_name,
+        missing_ppe=request.missing_ppe,
+        worker_id=request.worker_id,
+    )
+
+    save_compliance_record(eval_result)
+    save_audit_evidence_trail(eval_result["audit_trail"], incident_id=inc_id)
+
+    return {
+        "status": "success",
+        "evaluation": eval_result,
+    }
+
+
+@app.get("/insurance/exposure")
+def get_insurance_exposure(zone_name: str = "Zone B - Perimeter Scaffolding"):
+    """Retrieve insurance policy assumptions and actuarial exposure baseline."""
+    agent = InsuranceAgent()
+    compliance_agent = ComplianceAgent()
+    # Baseline exposure projection
+    sample_violations = [
+        {
+            "severity": "CRITICAL",
+            "statutory_penalty_estimate": 16131.0,
+        },
+        {
+            "severity": "HIGH",
+            "statutory_penalty_estimate": 11840.0,
+        },
+    ]
+    exposure = agent.calculate_exposure(
+        incident_id="BASELINE-EXPOSURE",
+        zone_name=zone_name,
+        violations=sample_violations,
+    )
+    return {
+        "policy_assumptions": DEFAULT_POLICY_ASSUMPTIONS,
+        "baseline_exposure_model": exposure,
+    }
+
+
+@app.get("/claims")
+def list_insurance_claims(limit: int = 20):
+    """Retrieve saved insurance claims and FNOL dossiers."""
+    claims = get_insurance_claims(limit=limit)
+    return {
+        "claims": claims,
+        "count": len(claims),
+    }
+
+
+@app.get("/claims/{claim_id}")
+def get_claim(claim_id: str):
+    """Retrieve single claim dossier by ID."""
+    claim = get_insurance_claim_by_id(claim_id)
+    if not claim:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found.")
+    return {"claim": claim}
+
+
+@app.post("/demo/milestone3")
+def run_milestone3_demo_endpoint(request: Milestone3DemoRequest):
+    """
+    Official Milestone 3 Demonstration Runner API:
+    - 'standard_flagged': Flagged Incident -> Checklist Violation -> Claim Summary (Input -> Processing -> Output)
+    - 'error_recovery': Cryptographic Evidence Tampering -> Anomaly Flag -> Secondary Fail-Safe Recovery
+    - 'sample_case': Complete Construction Insurance Case with Underwriting Assumptions & EMR Impact
+    """
+    result = run_milestone3_pipeline(
+        scenario=request.scenario,
+        zone_name=request.zone_name,
+        missing_ppe=request.missing_ppe,
+        worker_id=request.worker_id,
+        incident_notes=request.incident_notes,
+    )
+
+    # Persist the generated records to the SQLite database
+    try:
+        inc_id = result["input"]["incident_id"]
+        comp = result["processing"]["compliance_evaluation"]
+        save_compliance_record(comp)
+        save_audit_evidence_trail(comp["audit_trail"], incident_id=inc_id)
+
+        claim_summary = result["output"]["claim_summary"]
+        exposure = result["processing"]["insurance_exposure"]
+        claim_payload = {
+            **claim_summary,
+            "loss_severity_score": exposure["loss_severity_score"],
+            "severity_tier": exposure["severity_tier"],
+            "workers_comp_reserve": exposure["financial_breakdown"]["workers_comp_reserve"],
+            "cgl_third_party_reserve": exposure["financial_breakdown"]["cgl_third_party_reserve"],
+            "statutory_osha_penalties": exposure["financial_breakdown"]["statutory_osha_penalties"],
+            "legal_defense_reserve": exposure["financial_breakdown"]["legal_defense_reserve"],
+            "contractor_deductible": exposure["policy_layering"]["contractor_retained_loss"],
+            "net_insurer_exposure": exposure["policy_layering"]["net_insurer_exposure"],
+            "projected_emr": exposure["emr_impact_projection"]["projected_emr"],
+        }
+        save_insurance_claim(claim_payload, incident_id=inc_id, zone_name=result["input"]["zone_name"])
+    except Exception as exc:
+        print(f"Warning: Failed to persist demo records to DB: {exc}")
+
+    return {
+        "status": "success",
+        "demo_result": result,
+        "recent_claims": get_insurance_claims(limit=5),
+        "recent_audit_trail": get_audit_evidence_trail(limit=10),
+    }
+
 

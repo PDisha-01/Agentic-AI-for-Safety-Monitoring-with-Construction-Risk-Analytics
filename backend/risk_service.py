@@ -1,9 +1,18 @@
 from datetime import datetime, timedelta, timezone
+import json
 from sqlalchemy import select, text
 
 from backend.auth import hash_password, verify_password
 from backend.database import Base, SessionLocal, engine
-from backend.models import RiskAssessment, SafetyAlert, User, WorkerReport
+from backend.models import (
+    AuditEvidenceRecord,
+    ComplianceCheckRecord,
+    InsuranceClaimRecord,
+    RiskAssessment,
+    SafetyAlert,
+    User,
+    WorkerReport,
+)
 from src.safety_agent import ZONE_PROFILES, run_safety_agent
 from src.site_risk_agent import run_site_risk_agent
 
@@ -126,6 +135,104 @@ def initialize_database() -> None:
             ]
             for sa in sample_alerts:
                 session.add(sa)
+            session.commit()
+
+        # Seed initial realistic Milestone 3 claim and compliance record if empty
+        first_claim = session.scalars(select(InsuranceClaimRecord)).first()
+        if not first_claim:
+            now = datetime.now(timezone.utc)
+            sample_claim = InsuranceClaimRecord(
+                claim_id="CLM-2026-B8910",
+                incident_id="INC-2026-SCAF-01",
+                zone_name="Zone B - Perimeter Scaffolding",
+                loss_severity_score=78.5,
+                severity_tier="HIGH EXPOSURE",
+                total_estimated_financial_exposure=342500.0,
+                workers_comp_reserve=140400.0,
+                cgl_third_party_reserve=76440.0,
+                statutory_osha_penalties=44102.0,
+                legal_defense_reserve=70325.0,
+                contractor_retained_loss=50000.0,
+                net_insurer_exposure=292500.0,
+                projected_emr=1.27,
+                claim_status="CLAIM_READY",
+                claim_dossier_markdown="""# FIRST NOTICE OF LOSS (FNOL) & CLAIM-READY INCIDENT DOSSIER
+**HazardHawk AI — Autonomous Construction Claims Documentation System**
+**Claim Reference ID:** `CLM-2026-B8910` | **Date of Occurrence:** 2026-11-19 14:30:00 UTC
+
+### 1. INSURED & POLICY PARTICULARS
+- **Named Insured:** Apex Structural Constructors LLC
+- **Project Site:** Metro Tower Phase III - High-Rise Commercial Construction
+- **Insurance Carrier:** Travelers / Zurich Commercial Construction Syndicate
+- **Policy Number:** POL-CGL-2026-984210
+- **Policy Coverage:** Commercial General Liability ($5,000,000) & Statutory Workers' Comp ($1,000,000)
+- **Contractor Retained Deductible (SIR):** $50,000.00
+
+### 2. INCIDENT OVERVIEW & OCCURRENCE LOCATION
+- **Incident ID:** `INC-2026-SCAF-01`
+- **Construction Sector:** Zone B - Perimeter Scaffolding (Level 7, +21.4m elevation)
+- **Worker Involved:** Worker #3 (Rajeev Sharma - Steel Rigger)
+- **Initial Observation:** Worker observed near unprotected perimeter edge without tied-off harness lanyard and missing ANSI Z89.1 hard hat.
+- **Loss Severity Score:** **78.5/100** (HIGH EXPOSURE)
+
+### 3. STATUTORY COMPLIANCE CHECKLIST VIOLATIONS
+**Violation #1: Head Protection & Impact Hard Hats**
+- **Statutory Standard:** `OSHA 29 CFR 1926.100(a)` | **ISO Clause:** `ISO 45001:2018 Cl. 8.1.2`
+- **Infraction Details:** Missing mandatory HELMET while operating in Zone B - Perimeter Scaffolding.
+- **Statutory Fine Base:** $16,131.00
+- **Cryptographic Evidence SHA-256:** `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+
+**Violation #2: Fall Protection on Elevated Scaffolding**
+- **Statutory Standard:** `OSHA 29 CFR 1926.501(b)(1) & 1926.451(g)` | **ISO Clause:** `ISO 45001:2018 Cl. 6.1.2 & 8.1.2`
+- **Infraction Details:** Missing mandatory HARNESS and BOOTS at elevation > 6ft.
+- **Statutory Fine Base:** $16,131.00
+- **Cryptographic Evidence SHA-256:** `4a53cee3fb02022449b294e7e40c009d3725fe702f3954e730e284f7d6da734e`
+
+### 4. ACTUARIAL FINANCIAL EXPOSURE & LOSS RESERVES
+- **Workers' Compensation Reserve (Medical/Lost Wages):** $140,400.00
+- **Commercial General Liability Reserve (Third-Party):** $76,440.00
+- **Statutory OSHA Regulatory Penalties:** $44,102.00
+- **Legal Defense & Claims Investigation Reserve:** $70,325.00
+- **Jobsite Stoppage / Delay Cost Estimate:** $45,000.00
+- **TOTAL ESTIMATED FINANCIAL EXPOSURE:** **$342,500.00**
+
+### 5. POLICY ALLOCATION & ADJUSTER INDEMNITY
+- **Contractor Retained Loss (Under SIR Deductible):** $50,000.00
+- **Net Insurer Indemnity Exposure:** **$292,500.00**
+- **Projected EMR Rating Impact:** 1.00 ➔ **1.27 (+0.27)**
+- **Estimated 3-Year Cumulative Premium Hike:** $230,850.00
+""",
+                created_at=now - timedelta(hours=2),
+            )
+            session.add(sample_claim)
+
+            # Sample audit evidence
+            session.add(
+                AuditEvidenceRecord(
+                    incident_id="INC-2026-SCAF-01",
+                    check_id="CHK-OSHA-1926.100",
+                    standard="OSHA 29 CFR 1926.100(a)",
+                    zone_name="Zone B - Perimeter Scaffolding",
+                    worker_id="Worker #3",
+                    evidence_hash="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    verification_status="VERIFIED",
+                    confidence_score=0.96,
+                    created_at=now - timedelta(hours=2),
+                )
+            )
+            session.add(
+                AuditEvidenceRecord(
+                    incident_id="INC-2026-SCAF-01",
+                    check_id="CHK-OSHA-1926.501",
+                    standard="OSHA 29 CFR 1926.501(b)(1)",
+                    zone_name="Zone B - Perimeter Scaffolding",
+                    worker_id="Worker #3",
+                    evidence_hash="4a53cee3fb02022449b294e7e40c009d3725fe702f3954e730e284f7d6da734e",
+                    verification_status="VERIFIED",
+                    confidence_score=0.94,
+                    created_at=now - timedelta(hours=2),
+                )
+            )
             session.commit()
 
 
@@ -619,3 +726,215 @@ def get_zone_safety_analytics() -> list[dict]:
         })
 
     return results
+
+
+# =========================================================================
+# Milestone 3 Compliance & Insurance Persistence Services
+# =========================================================================
+
+def save_compliance_record(record_data: dict) -> dict:
+    """Persist compliance evaluation record and return dictionary."""
+    with SessionLocal() as session:
+        rec = ComplianceCheckRecord(
+            incident_id=record_data["incident_id"],
+            zone_name=record_data["zone_name"],
+            worker_id=record_data.get("worker_id", "Worker #3"),
+            overall_status=record_data.get("overall_status", "NON_COMPLIANT"),
+            compliance_rate=float(record_data.get("compliance_rate", 0.0)),
+            checks_evaluated=int(record_data.get("checks_evaluated", 0)),
+            violations_count=int(record_data.get("violations_count", 0)),
+            total_statutory_penalty=float(record_data.get("total_statutory_penalty_estimate", 0.0)),
+            violations_json=json.dumps(record_data.get("violations", [])),
+        )
+        session.add(rec)
+        session.commit()
+        session.refresh(rec)
+        return {
+            "id": rec.id,
+            "incident_id": rec.incident_id,
+            "zone_name": rec.zone_name,
+            "overall_status": rec.overall_status,
+            "compliance_rate": rec.compliance_rate,
+            "violations_count": rec.violations_count,
+            "total_statutory_penalty": rec.total_statutory_penalty,
+            "created_at": rec.created_at.isoformat(),
+        }
+
+
+def get_compliance_records(limit: int = 20) -> list[dict]:
+    """Retrieve compliance evaluation records."""
+    with SessionLocal() as session:
+        records = session.scalars(
+            select(ComplianceCheckRecord)
+            .order_by(ComplianceCheckRecord.created_at.desc())
+            .limit(limit)
+        ).all()
+        return [
+            {
+                "id": r.id,
+                "incident_id": r.incident_id,
+                "zone_name": r.zone_name,
+                "worker_id": r.worker_id,
+                "overall_status": r.overall_status,
+                "compliance_rate": r.compliance_rate,
+                "checks_evaluated": r.checks_evaluated,
+                "violations_count": r.violations_count,
+                "total_statutory_penalty": r.total_statutory_penalty,
+                "violations": json.loads(r.violations_json or "[]"),
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in records
+        ]
+
+
+def save_audit_evidence_trail(trail_list: list[dict], incident_id: str) -> list[dict]:
+    """Persist check-to-evidence audit items with cryptographic hashes."""
+    saved_items = []
+    with SessionLocal() as session:
+        for item in trail_list:
+            rec = AuditEvidenceRecord(
+                incident_id=incident_id,
+                check_id=item["check_id"],
+                standard=item.get("standard", "OSHA 1926"),
+                zone_name=item.get("zone_name", "Zone B - Perimeter Scaffolding"),
+                worker_id=item.get("worker_id", "Worker #3"),
+                evidence_hash=item.get("evidence_hash", "0" * 64),
+                verification_status=item.get("verification_status", "VERIFIED"),
+                confidence_score=float(item.get("confidence_score", 0.95)),
+            )
+            session.add(rec)
+            session.commit()
+            session.refresh(rec)
+            saved_items.append({
+                "id": rec.id,
+                "incident_id": rec.incident_id,
+                "check_id": rec.check_id,
+                "standard": rec.standard,
+                "evidence_hash": rec.evidence_hash,
+                "verification_status": rec.verification_status,
+                "created_at": rec.created_at.isoformat(),
+            })
+    return saved_items
+
+
+def get_audit_evidence_trail(incident_id: str | None = None, limit: int = 50) -> list[dict]:
+    """Retrieve audit evidence records with cryptographic hashes."""
+    with SessionLocal() as session:
+        query = select(AuditEvidenceRecord).order_by(AuditEvidenceRecord.created_at.desc()).limit(limit)
+        if incident_id:
+            query = query.where(AuditEvidenceRecord.incident_id == incident_id)
+        records = session.scalars(query).all()
+        return [
+            {
+                "id": r.id,
+                "incident_id": r.incident_id,
+                "check_id": r.check_id,
+                "standard": r.standard,
+                "zone_name": r.zone_name,
+                "worker_id": r.worker_id,
+                "evidence_hash": r.evidence_hash,
+                "verification_status": r.verification_status,
+                "confidence_score": r.confidence_score,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in records
+        ]
+
+
+def save_insurance_claim(claim_data: dict, incident_id: str, zone_name: str) -> dict:
+    """Persist synthesized insurance claim and FNOL dossier."""
+    with SessionLocal() as session:
+        rec = InsuranceClaimRecord(
+            claim_id=claim_data["claim_id"],
+            incident_id=incident_id,
+            zone_name=zone_name,
+            loss_severity_score=float(claim_data.get("loss_severity_score", 75.0)),
+            severity_tier=claim_data.get("severity_tier", "HIGH EXPOSURE"),
+            total_estimated_financial_exposure=float(claim_data.get("total_estimated_financial_exposure", 0.0)),
+            workers_comp_reserve=float(claim_data.get("workers_comp_reserve", 0.0)),
+            cgl_third_party_reserve=float(claim_data.get("cgl_third_party_reserve", 0.0)),
+            statutory_osha_penalties=float(claim_data.get("statutory_osha_penalties", 0.0)),
+            legal_defense_reserve=float(claim_data.get("legal_defense_reserve", 0.0)),
+            contractor_retained_loss=float(claim_data.get("contractor_deductible", 50000.0)),
+            net_insurer_exposure=float(claim_data.get("net_insurer_exposure", 0.0)),
+            projected_emr=float(claim_data.get("projected_emr", 1.25)),
+            claim_status=claim_data.get("claim_status", "CLAIM_READY"),
+            claim_dossier_markdown=claim_data.get("claim_dossier_markdown", ""),
+        )
+        session.add(rec)
+        session.commit()
+        session.refresh(rec)
+        return {
+            "id": rec.id,
+            "claim_id": rec.claim_id,
+            "incident_id": rec.incident_id,
+            "zone_name": rec.zone_name,
+            "loss_severity_score": rec.loss_severity_score,
+            "total_estimated_financial_exposure": rec.total_estimated_financial_exposure,
+            "net_insurer_exposure": rec.net_insurer_exposure,
+            "projected_emr": rec.projected_emr,
+            "claim_status": rec.claim_status,
+            "created_at": rec.created_at.isoformat(),
+        }
+
+
+def get_insurance_claims(limit: int = 20) -> list[dict]:
+    """Retrieve historical insurance claims and FNOL dossiers."""
+    with SessionLocal() as session:
+        claims = session.scalars(
+            select(InsuranceClaimRecord)
+            .order_by(InsuranceClaimRecord.created_at.desc())
+            .limit(limit)
+        ).all()
+        return [
+            {
+                "id": c.id,
+                "claim_id": c.claim_id,
+                "incident_id": c.incident_id,
+                "zone_name": c.zone_name,
+                "loss_severity_score": c.loss_severity_score,
+                "severity_tier": c.severity_tier,
+                "total_estimated_financial_exposure": c.total_estimated_financial_exposure,
+                "workers_comp_reserve": c.workers_comp_reserve,
+                "cgl_third_party_reserve": c.cgl_third_party_reserve,
+                "statutory_osha_penalties": c.statutory_osha_penalties,
+                "legal_defense_reserve": c.legal_defense_reserve,
+                "contractor_retained_loss": c.contractor_retained_loss,
+                "net_insurer_exposure": c.net_insurer_exposure,
+                "projected_emr": c.projected_emr,
+                "claim_status": c.claim_status,
+                "claim_dossier_markdown": c.claim_dossier_markdown,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in claims
+        ]
+
+
+def get_insurance_claim_by_id(claim_id: str) -> dict | None:
+    """Retrieve single claim dossier by claim ID."""
+    with SessionLocal() as session:
+        c = session.scalars(
+            select(InsuranceClaimRecord).where(InsuranceClaimRecord.claim_id == claim_id)
+        ).first()
+        if not c:
+            return None
+        return {
+            "id": c.id,
+            "claim_id": c.claim_id,
+            "incident_id": c.incident_id,
+            "zone_name": c.zone_name,
+            "loss_severity_score": c.loss_severity_score,
+            "severity_tier": c.severity_tier,
+            "total_estimated_financial_exposure": c.total_estimated_financial_exposure,
+            "workers_comp_reserve": c.workers_comp_reserve,
+            "cgl_third_party_reserve": c.cgl_third_party_reserve,
+            "statutory_osha_penalties": c.statutory_osha_penalties,
+            "legal_defense_reserve": c.legal_defense_reserve,
+            "contractor_retained_loss": c.contractor_retained_loss,
+            "net_insurer_exposure": c.net_insurer_exposure,
+            "projected_emr": c.projected_emr,
+            "claim_status": c.claim_status,
+            "claim_dossier_markdown": c.claim_dossier_markdown,
+            "created_at": c.created_at.isoformat(),
+        }
+
