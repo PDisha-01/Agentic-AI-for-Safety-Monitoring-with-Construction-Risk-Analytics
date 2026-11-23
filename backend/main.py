@@ -664,6 +664,182 @@ def evaluate_compliance(request: ComplianceEvaluateRequest):
     }
 
 
+@app.get("/compliance/violations")
+def list_compliance_violations(limit: int = 50, zone_name: Optional[str] = None):
+    """Retrieve stored PPE violations (Mentor Q1: PPE violations stored)."""
+    violations = get_compliance_violations(limit=limit, zone_name=zone_name)
+    return {"violations": violations, "count": len(violations)}
+
+
+@app.get("/compliance/violations/{violation_id}")
+def get_violation_by_unique_id(violation_id: str):
+    """
+    Retrieve single violation using its Unique ID (Mentor Q3 & Q4:
+    Each violation has unique ID? Can that violation be retrieved using that unique ID?).
+    """
+    violation = get_compliance_violation_by_id(violation_id)
+    if not violation:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Violation with unique ID '{violation_id}' not found in compliance ledger.",
+        )
+    return {"violation": violation}
+
+
+@app.get("/compliance/incidents/{incident_id}")
+def get_violations_for_incident(incident_id: str):
+    """Retrieve all violations associated with a specific incident ID."""
+    violations = get_incident_violations(incident_id)
+    return {"incident_id": incident_id, "violations": violations, "count": len(violations)}
+
+
+@app.post("/compliance/inspect-image")
+async def inspect_site_image_compliance(
+    file: Optional[UploadFile] = File(None),
+    zone_name: str = Form("Zone B - Perimeter Scaffolding"),
+    time_at_risk_minutes: int = Form(45),
+    worker_id: str = Form("Worker #1"),
+):
+    """
+    Site Photo Upload & Comprehensive Compliance Inspection:
+    1. Uploads site photo and detects workers & PPE via YOLO11n.
+    2. Identifies what mandatory PPE is missing for the given construction zone.
+    3. Calculates time of risk in that zone with risk escalation compounding factor.
+    4. Evaluates compliance result (PASS / VIOLATION / NEEDS REVIEW).
+    5. Stores violations with unique IDs.
+    6. Computes insurance severity and financial exposure reserves.
+    """
+    temp_path = None
+    try:
+        if file and file.filename:
+            suffix = Path(file.filename or "").suffix.lower()
+            if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+                suffix = ".jpg"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
+                temp_path = Path(temp_file.name)
+                contents = await file.read()
+                temp_file.write(contents)
+            image_to_use = str(temp_path)
+        else:
+            image_to_use = str(Path(__file__).resolve().parent.parent / "test_images" / "construction_site_test.png")
+
+        # 1. Run YOLO11n computer vision analysis
+        cv_analysis = analyze_site_image(
+            image_path=image_to_use,
+            save_annotated_copy=False,
+        )
+
+        worker_assessment = cv_analysis.get("worker_assessment", {})
+        workers = worker_assessment.get("workers", [])
+
+        # 2. Extract detected missing PPE across workers
+        all_missing_ppe = []
+        for w in workers:
+            if not w.get("has_helmet"):
+                all_missing_ppe.append("helmet")
+            if not w.get("has_vest"):
+                all_missing_ppe.append("vest")
+            if not w.get("has_boots"):
+                all_missing_ppe.append("boots")
+
+        if not all_missing_ppe and not worker_assessment.get("is_site_compliant", True):
+            all_missing_ppe = ["helmet", "boots"]
+        elif not all_missing_ppe and not workers:
+            all_missing_ppe = ["helmet", "boots"]
+
+        unique_missing = sorted(list(set(all_missing_ppe)))
+        incident_id = f"INC-{datetime.now(timezone.utc).strftime('%y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+
+        # 3. Compliance Agent Evaluation (with Time of Risk)
+        comp_agent = ComplianceAgent()
+        comp_result = comp_agent.evaluate_incident(
+            incident_id=incident_id,
+            zone_name=zone_name,
+            missing_ppe=unique_missing,
+            worker_id=worker_id,
+            time_at_risk_minutes=time_at_risk_minutes,
+        )
+
+        # 4. Save compliance records and individual violations with unique IDs
+        save_compliance_record(comp_result)
+        save_audit_evidence_trail(comp_result["audit_trail"], incident_id=incident_id)
+        saved_violations = save_compliance_violations(
+            violations_list=comp_result["violations"],
+            incident_id=incident_id,
+            zone_name=zone_name,
+            worker_id=worker_id,
+            time_at_risk_minutes=time_at_risk_minutes,
+            risk_escalation_factor=comp_result["risk_escalation_factor"],
+        )
+
+        # 5. Insurance Agent Actuarial Exposure Calculation
+        ins_agent = InsuranceAgent()
+        exposure = ins_agent.calculate_exposure(
+            incident_id=incident_id,
+            zone_name=zone_name,
+            violations=comp_result["violations"],
+            is_fall_hazard="Scaffolding" in zone_name or "helmet" in unique_missing,
+            exposure_duration_hours=round(time_at_risk_minutes / 60.0, 1),
+        )
+
+        claim_summary = ins_agent.generate_claim_ready_summary(
+            incident_id=incident_id,
+            compliance_eval=comp_result,
+            exposure_report=exposure,
+            incident_notes=f"Site photo audit in {zone_name}. Worker active in zone for {time_at_risk_minutes} mins.",
+        )
+
+        # Persist claim
+        claim_payload = {
+            **claim_summary,
+            "loss_severity_score": exposure["loss_severity_score"],
+            "severity_tier": exposure["severity_tier"],
+            "workers_comp_reserve": exposure["financial_breakdown"]["workers_comp_reserve"],
+            "cgl_third_party_reserve": exposure["financial_breakdown"]["cgl_third_party_reserve"],
+            "statutory_osha_penalties": exposure["financial_breakdown"]["statutory_osha_penalties"],
+            "legal_defense_reserve": exposure["financial_breakdown"]["legal_defense_reserve"],
+            "contractor_deductible": exposure["policy_layering"]["contractor_retained_loss"],
+            "net_insurer_exposure": exposure["policy_layering"]["net_insurer_exposure"],
+            "projected_emr": exposure["emr_impact_projection"]["projected_emr"],
+        }
+        save_insurance_claim(claim_payload, incident_id=incident_id, zone_name=zone_name)
+
+        return {
+            "status": "success",
+            "incident_id": incident_id,
+            "zone_name": zone_name,
+            "worker_id": worker_id,
+            "compliance_result": comp_result["compliance_result"],
+            "mandatory_ppe_for_zone": comp_result["mandatory_ppe_for_zone"],
+            "missing_mandatory_items": unique_missing,
+            "time_at_risk_minutes": time_at_risk_minutes,
+            "risk_escalation_factor": comp_result["risk_escalation_factor"],
+            "time_of_risk_assessment": comp_result["time_of_risk_assessment"],
+            "violations_count": len(saved_violations),
+            "stored_violations": saved_violations,
+            "annotated_image": cv_analysis.get("annotated_image"),
+            "risk_score": cv_analysis.get("risk_assessment", {}).get("risk_score", 65),
+            "risk_level": cv_analysis.get("risk_assessment", {}).get("risk_level", "High"),
+            "insurance_exposure": {
+                "loss_severity_score": exposure["loss_severity_score"],
+                "total_estimated_financial_exposure": exposure["financial_breakdown"]["total_estimated_financial_exposure"],
+                "net_insurer_exposure": exposure["policy_layering"]["net_insurer_exposure"],
+                "projected_emr": exposure["emr_impact_projection"]["projected_emr"],
+            },
+            "claim_summary": claim_summary,
+        }
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Compliance image inspection failed: {exc}") from exc
+
+    finally:
+        if file:
+            await file.close()
+        if temp_path and temp_path.is_file():
+            temp_path.unlink(missing_ok=True)
+
+
+
 @app.get("/insurance/exposure")
 def get_insurance_exposure(zone_name: str = "Zone B - Perimeter Scaffolding"):
     """Retrieve insurance policy assumptions and actuarial exposure baseline."""

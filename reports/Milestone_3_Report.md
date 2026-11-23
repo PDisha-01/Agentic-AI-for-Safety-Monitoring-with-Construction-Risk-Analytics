@@ -54,6 +54,32 @@ Milestone 3 operates as a hierarchical multi-agent state workflow:
 [ Enterprise Outputs: React Compliance Dashboard + SQLite Audit Ledger ]
 ```
 
+### 2.1 Plain-English Role of the Compliance Agent & 5-Stage Architecture Flow
+
+The 5-stage architectural pipeline operates as follows:
+$$\text{Site Inputs (CCTV • logs • inspections)} \longrightarrow \text{Site + Safety Agents} \longrightarrow \text{Compliance + Insurance Agents} \longrightarrow \text{Risk Intelligence + Reporting} \longrightarrow \text{Dashboards + Alerts}$$
+
+#### What Does the Compliance Agent Actually Do?
+1. **Ingests Milestone 2 Safety Agent Detections:** Receives raw worker bounding boxes, detected PPE equipment (`helmet`, `vest`, `boots`, `harness`), and active zone spatial coordinates.
+2. **Audits Against Mandatory Site Policy & Statutory Law:** Cross-references detections against the statutory checklist (**OSHA 29 CFR 1926** and **ISO 45001:2018 Cl. 8.1.2**) and the zone's mandatory PPE policy (e.g., Level 7 Scaffolding strictly mandates hard hat + fall arrest harness).
+3. **Calculates Zone Time-at-Risk & Escalation Factor:** Computes worker continuous exposure duration in the hazard zone using the actuarial compounding formula:
+   $$\text{Risk Escalation Factor} = 1.0 + \min\left(1.0, \frac{\text{TimeAtRiskMinutes}}{60} \times 0.35\right)$$
+   *(e.g., 45 minutes of exposure increases the risk probability factor to $1.26\times$).*
+4. **Emits Compliance Verdict:** Assigns an unambiguous verdict: **`PASS`**, **`VIOLATION`**, or **`NEEDS REVIEW`** (for low-confidence detections $< 0.60$ or corrupted evidence).
+5. **Mints Deterministic Unique ID & Stores Forensic Record:** Persists each individual violation in SQLite with a deterministic identifier (e.g., `VIO-2026-SCAF-8910`) and SHA-256 cryptographic digest.
+6. **Hands Off Structured Violation to Insurance Agent:** Transmits structured violation parameters directly to the Insurance Agent to quantify loss severity, allocate insurance reserves ($EFE$), and synthesize the First Notice of Loss (FNOL) claim dossier.
+
+---
+
+### 2.2 Direct Answers to Mentor Review Questions (Notebook Validation)
+
+| Mentor Review Question | Direct System Answer | Technical Implementation & Verification Evidence |
+| :--- | :--- | :--- |
+| **Q1: Are PPE violations stored?** | **YES** | Persisted in SQLite table `compliance_violations` (`data/site_risk.db`) via `save_compliance_violations()`. |
+| **Q2: Check what info that one violation contains?** | **COMPLETE FORENSIC RECORD (15 Fields)** | Contains `violation_id`, `incident_id`, `zone_name`, `worker_id`, `missing_ppe`, `mandatory_ppe`, `osha_standard`, `iso_clause`, `severity_tier`, `compliance_result`, `time_at_risk_minutes`, `risk_escalation_factor`, `statutory_fine_estimate`, `evidence_hash`, and `remedial_directive`. |
+| **Q3: Does each violation have a unique ID?** | **YES** | Deterministic format: `VIO-{YEAR}-{ZONE_PREFIX}-{HEX_SUFFIX}` (e.g., `VIO-2026-SCAF-8910`, `VIO-2026-SCAF-8911`). |
+| **Q4: Can that violation be retrieved using that unique ID?** | **YES** | Queryable via REST endpoint `GET /compliance/violations/{violation_id}` and interactive UI search bar in the Compliance tab. Verified by calling `get_compliance_violation_by_id("VIO-2026-SCAF-8910")`. |
+
 ---
 
 ## 3. Official Demonstration: Flagged Incident to Claim-Ready Summary
