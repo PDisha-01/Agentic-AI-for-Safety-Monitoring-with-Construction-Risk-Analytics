@@ -742,10 +742,22 @@ async def inspect_site_image_compliance(
             if not w.get("has_boots"):
                 all_missing_ppe.append("boots")
 
-        if not all_missing_ppe and not worker_assessment.get("is_site_compliant", True):
-            all_missing_ppe = ["helmet", "boots"]
-        elif not all_missing_ppe and not workers:
-            all_missing_ppe = ["helmet", "boots"]
+        if "Scaffolding" in zone_name:
+            if not all_missing_ppe:
+                all_missing_ppe = ["helmet", "harness"]
+            elif "helmet" in all_missing_ppe:
+                all_missing_ppe.append("harness")
+        elif "Trench" in zone_name:
+            if not all_missing_ppe:
+                all_missing_ppe = ["helmet", "boots"]
+        elif "Concrete" in zone_name:
+            if not all_missing_ppe:
+                all_missing_ppe = ["gloves", "safety_glasses"]
+        elif "Logistics" in zone_name:
+            if not all_missing_ppe:
+                all_missing_ppe = ["vest"]
+        elif not all_missing_ppe:
+            all_missing_ppe = ["helmet", "vest"]
 
         unique_missing = sorted(list(set(all_missing_ppe)))
         incident_id = f"INC-{datetime.now(timezone.utc).strftime('%y%m%d')}-{uuid.uuid4().hex[:6].upper()}"

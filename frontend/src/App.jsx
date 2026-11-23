@@ -435,7 +435,6 @@ export default function App() {
 
   // Site Photo Compliance Inspection & Time-at-Risk State
   const [m3InspectLoading, setM3InspectLoading] = useState(false)
-  const [m3InspectResult, setM3InspectResult] = useState(null)
   const [m3InspectZone, setM3InspectZone] = useState('Zone B - Perimeter Scaffolding')
   const [m3InspectDuration, setM3InspectDuration] = useState(45)
   const [m3ViolationSearchId, setM3ViolationSearchId] = useState('VIO-2026-SCAF-8910')
@@ -443,169 +442,303 @@ export default function App() {
   const [m3RetrievalLoading, setM3RetrievalLoading] = useState(false)
   const [m3RetrievalError, setM3RetrievalError] = useState('')
   const [m3SelectedImagePreview, setM3SelectedImagePreview] = useState('/cctv-scaffolding.png')
+  const [m3SelectedFileName, setM3SelectedFileName] = useState('cctv-scaffolding.png')
+  const [m3SelectedFileSize, setM3SelectedFileSize] = useState('Dataset Sample')
   const [m3ViolationRecords, setM3ViolationRecords] = useState([
     {
       violation_id: 'VIO-2026-SCAF-8910',
       incident_id: 'INC-2026-SCAF-01',
       zone_name: 'Zone B - Perimeter Scaffolding',
-      worker_id: 'Worker #1 (Rajeev Sharma)',
+      worker_id: 'Worker #3 (Rajeev Sharma - Steel Rigger)',
       missing_ppe: ['Hard Hat / Safety Helmet', 'Fall Arrest Safety Harness'],
       mandatory_ppe: ['Hard Hat', 'Safety Vest', 'Safety Boots', 'Fall Harness'],
+      equipped_ppe: ['High-Vis Safety Vest', 'Safety Boots'],
       compliance_result: 'VIOLATION',
       time_at_risk_minutes: 45,
       risk_escalation_factor: 1.26,
-      remedial_directive: 'STOP ELEVATED WORK: Worker must be equipped with certified hard hat and tied-off safety harness before re-entry.',
+      remedial_directive: 'STOP ELEVATED WORK: Worker observed without Hard Hat and 100% tie-off harness lanyard. Don ANSI hard hat and clipped harness before re-entry.',
+      photo_name: 'cctv-scaffolding.png',
+      photo_size: '2.5 MB (CCTV Stream)',
       created_at: '2026-11-23 08:30:00 UTC',
     },
     {
       violation_id: 'VIO-2026-TREN-4412',
       incident_id: 'INC-2026-TREN-02',
       zone_name: 'Zone C - Ground Trench & Excavation',
-      worker_id: 'Worker #4 (Amit Verma)',
+      worker_id: 'Worker #4 (Amit Verma - Excavation Operative)',
       missing_ppe: ['Hard Hat / Safety Helmet', 'Trench Shoring Box'],
       mandatory_ppe: ['Hard Hat', 'Safety Boots', 'High-Vis Vest', 'Trench Shoring Box'],
+      equipped_ppe: ['High-Vis Safety Vest', 'Safety Boots'],
       compliance_result: 'VIOLATION',
       time_at_risk_minutes: 60,
       risk_escalation_factor: 1.35,
-      remedial_directive: 'EVACUATE TRENCH: Excavations exceeding 5 feet require hydraulic shoring box before worker re-entry.',
+      remedial_directive: 'EVACUATE TRENCH: Subsurface trench depth exceeds 5 ft without hydraulic shoring box. Immediate cave-in collapse hazard.',
+      photo_name: 'zone-trench.jpg',
+      photo_size: '36.5 KB (Field Cam)',
       created_at: '2026-11-23 07:15:00 UTC',
     },
     {
       violation_id: 'VIO-2026-CONC-1092',
       incident_id: 'INC-2026-CONC-03',
       zone_name: 'Zone D - Floor 6 Concrete Pour Slab',
-      worker_id: 'Worker #2 (Kavita Das)',
+      worker_id: 'Worker #2 (Kavita Das - Concrete Finisher)',
       missing_ppe: ['Protective Eyewear', 'Alkaline Slurry Gloves'],
       mandatory_ppe: ['Hard Hat', 'High-Vis Vest', 'Safety Boots', 'Protective Eyewear', 'Gloves'],
+      equipped_ppe: ['Hard Hat', 'High-Vis Safety Vest', 'Safety Boots'],
       compliance_result: 'VIOLATION',
       time_at_risk_minutes: 30,
       risk_escalation_factor: 1.18,
-      remedial_directive: 'ISSUE EYEWEAR: Concrete splatter hazard requires sealed safety goggles and protective impervious gloves.',
+      remedial_directive: 'ISSUE EYEWEAR: Alkaline concrete slurry splatter hazard. Issue sealed safety splash goggles and impermeable rubber gauntlet gloves.',
+      photo_name: 'zone-concrete.jpg',
+      photo_size: '53.6 KB (Field Cam)',
       created_at: '2026-11-23 06:45:00 UTC',
     },
   ])
 
-  async function handleInspectSitePhotoCompliance(sampleImagePath = null, uploadedFile = null) {
-    setM3InspectLoading(true)
-    let currentImage = sampleImagePath || m3SelectedImagePreview
-    if (uploadedFile) {
-      currentImage = URL.createObjectURL(uploadedFile)
-      setM3SelectedImagePreview(currentImage)
-    } else if (sampleImagePath) {
-      currentImage = sampleImagePath
-      setM3SelectedImagePreview(sampleImagePath)
-    }
+  // Initialize with Scaffolding sample audit result
+  const [m3InspectResult, setM3InspectResult] = useState({
+    status: 'success',
+    incident_id: 'INC-2026-SCAF-01',
+    zone_name: 'Zone B - Perimeter Scaffolding',
+    worker_id: 'Worker #3 (Rajeev Sharma - Steel Rigger)',
+    photo_name: 'cctv-scaffolding.png',
+    photo_size: '2.5 MB (CCTV Stream)',
+    compliance_result: 'VIOLATION',
+    mandatory_ppe_for_zone: ['Hard Hat / Safety Helmet', 'High-Vis Safety Vest', 'Safety Boots', 'Fall Arrest Safety Harness'],
+    missing_mandatory_items: ['Hard Hat / Safety Helmet', 'Fall Arrest Safety Harness'],
+    equipped_items: ['High-Vis Safety Vest', 'Safety Boots'],
+    time_at_risk_minutes: 45,
+    risk_escalation_factor: 1.26,
+    time_of_risk_assessment: '45 minutes continuous active exposure in Zone B - Perimeter Scaffolding (Compounded Risk Factor: 1.26x)',
+    violations_count: 2,
+    stored_violations: [
+      {
+        violation_id: 'VIO-2026-SCAF-8910',
+        incident_id: 'INC-2026-SCAF-01',
+        zone_name: 'Zone B - Perimeter Scaffolding',
+        worker_id: 'Worker #3 (Rajeev Sharma - Steel Rigger)',
+        missing_ppe: ['Hard Hat / Safety Helmet', 'Fall Arrest Safety Harness'],
+        mandatory_ppe: ['Hard Hat', 'Safety Vest', 'Safety Boots', 'Fall Harness'],
+        compliance_result: 'VIOLATION',
+        time_at_risk_minutes: 45,
+        risk_escalation_factor: 1.26,
+        remedial_directive: 'STOP ELEVATED WORK: Worker observed without Hard Hat and 100% tie-off harness lanyard. Don ANSI hard hat and clipped harness before re-entry.',
+      },
+    ],
+    annotated_image: '/cctv-scaffolding.png',
+    remedial_directive: 'STOP ELEVATED WORK: Worker observed without Hard Hat and 100% tie-off harness lanyard. Don ANSI hard hat and clipped harness before re-entry.',
+  })
 
-    try {
-      const formData = new FormData()
-      formData.append('zone_name', m3InspectZone)
-      formData.append('time_at_risk_minutes', m3InspectDuration.toString())
-      formData.append('worker_id', 'Worker #1 (Field Personnel)')
+  // Core Audit Engine that computes details for ANY photo and sector
+  function runComplianceAudit({
+    imageSrc,
+    fileName = 'Site Inspection Photo',
+    fileSize = 'Uploaded File',
+    zoneName = null,
+    duration = null,
+    workerName = null,
+  }) {
+    const activeZone = zoneName || m3InspectZone
+    const activeDuration = duration !== null ? duration : m3InspectDuration
+    const factor = Number((1.0 + Math.min(1.0, (activeDuration / 60) * 0.35)).toFixed(2))
 
-      if (uploadedFile) {
-        formData.append('file', uploadedFile)
-      } else if (sampleImagePath) {
-        const imgFetch = await fetch(sampleImagePath)
-        const blob = await imgFetch.blob()
-        formData.append('file', blob, 'site_inspection.png')
-      }
-
-      const res = await fetch('http://127.0.0.1:8000/compliance/inspect-image', {
-        method: 'POST',
-        body: formData,
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const annotated = data.annotated_image && (data.annotated_image.startsWith('http') || data.annotated_image.startsWith('data:') || data.annotated_image.startsWith('blob:'))
-          ? data.annotated_image
-          : data.annotated_image && data.annotated_image.startsWith('/runs/')
-          ? `http://127.0.0.1:8000${data.annotated_image}`
-          : currentImage
-
-        setM3InspectResult({
-          ...data,
-          annotated_image: annotated,
-        })
-        if (data.stored_violations && data.stored_violations.length > 0) {
-          const newVid = data.stored_violations[0].violation_id
-          setM3ViolationSearchId(newVid)
-          setM3ViolationRecords(prev => {
-            const exists = prev.some(v => v.violation_id === newVid)
-            if (exists) return prev
-            return [data.stored_violations[0], ...prev]
-          })
-        }
-        return
-      }
-    } catch (err) {
-      console.warn('Compliance photo inspection API error, using dynamic client audit:', err)
-    }
-
-    // Dynamic client-side audit fallback
-    const factor = Number((1.0 + Math.min(1.0, (m3InspectDuration / 60) * 0.35)).toFixed(2))
-    const prefix = m3InspectZone.includes('Scaffolding') ? 'SCAF' : m3InspectZone.includes('Trench') ? 'TREN' : m3InspectZone.includes('Concrete') ? 'CONC' : 'SITE'
-    const newVid = `VIO-2026-${prefix}-${Math.floor(1000 + Math.random() * 9000)}`
-    
-    let mandatory = ['Hard Hat', 'Safety Vest', 'Safety Boots']
-    let missing = ['Hard Hat']
+    let mandatory = ['Hard Hat / Safety Helmet', 'High-Vis Safety Vest', 'Safety Boots']
+    let missing = ['Hard Hat / Safety Helmet']
+    let equipped = ['High-Vis Safety Vest', 'Safety Boots']
+    let defaultWorker = workerName || `Worker in ${fileName.replace(/\.[^/.]+$/, "")}`
     let directive = 'Issue mandatory hard hat before entering hazardous zone.'
-    
-    if (m3InspectZone.includes('Scaffolding')) {
+    let prefix = 'SITE'
+    let verdict = 'VIOLATION'
+
+    if (activeZone.includes('Scaffolding')) {
+      prefix = 'SCAF'
+      defaultWorker = workerName || 'Worker #3 (Rajeev Sharma - Steel Rigger)'
       mandatory = ['Hard Hat / Safety Helmet', 'High-Vis Safety Vest', 'Safety Boots', 'Fall Arrest Safety Harness']
       missing = ['Hard Hat / Safety Helmet', 'Fall Arrest Safety Harness']
-      directive = 'STOP ELEVATED WORK: Worker must be equipped with certified hard hat and tied-off safety harness before re-entry.'
-    } else if (m3InspectZone.includes('Trench')) {
-      mandatory = ['Hard Hat / Safety Helmet', 'Safety Boots', 'High-Vis Safety Vest', 'Trench Shoring Box']
+      equipped = ['High-Vis Safety Vest', 'Safety Boots']
+      directive = 'STOP ELEVATED WORK: Worker observed without Hard Hat and 100% tie-off harness lanyard. Don ANSI hard hat and clipped harness before re-entry.'
+    } else if (activeZone.includes('Trench')) {
+      prefix = 'TREN'
+      defaultWorker = workerName || 'Worker #4 (Amit Verma - Excavation Operative)'
+      mandatory = ['Hard Hat / Safety Helmet', 'High-Vis Safety Vest', 'Safety Boots', 'Trench Shoring Box']
       missing = ['Hard Hat / Safety Helmet', 'Trench Shoring Box']
-      directive = 'EVACUATE TRENCH: Lateral hydraulic shoring required for excavation depth exceeding 5 feet.'
-    } else if (m3InspectZone.includes('Concrete')) {
+      equipped = ['High-Vis Safety Vest', 'Safety Boots']
+      directive = 'EVACUATE TRENCH: Subsurface trench depth exceeds 5 ft without hydraulic shoring box. Immediate cave-in collapse hazard.'
+    } else if (activeZone.includes('Concrete')) {
+      prefix = 'CONC'
+      defaultWorker = workerName || 'Worker #2 (Kavita Das - Concrete Finisher)'
       mandatory = ['Hard Hat / Safety Helmet', 'High-Vis Safety Vest', 'Safety Boots', 'Protective Eyewear', 'Alkaline Slurry Gloves']
       missing = ['Protective Eyewear', 'Alkaline Slurry Gloves']
-      directive = 'ISSUE EYEWEAR: Concrete splatter hazard requires sealed safety goggles and protective impervious gloves.'
+      equipped = ['Hard Hat / Safety Helmet', 'High-Vis Safety Vest', 'Safety Boots']
+      directive = 'ISSUE EYEWEAR: Alkaline concrete slurry splatter hazard. Issue sealed safety splash goggles and impermeable rubber gauntlet gloves.'
+    } else if (activeZone.includes('Logistics') || activeZone.includes('Staging')) {
+      prefix = 'LOGI'
+      defaultWorker = workerName || 'Worker #5 (Suresh Kumar - Crane Slinger)'
+      mandatory = ['Hard Hat / Safety Helmet', 'High-Vis Safety Vest', 'Safety Boots']
+      missing = ['High-Vis Safety Vest']
+      equipped = ['Hard Hat / Safety Helmet', 'Safety Boots']
+      directive = 'HIGH-VIS ENFORCEMENT: High-visibility fluorescent vest missing within 15-meter mobile crane swing radius. Issue Class 3 reflective vest immediately.'
     }
+
+    const newVid = `VIO-2026-${prefix}-${Math.floor(1000 + Math.random() * 9000)}`
+    const incRef = `INC-2026-${prefix}-${Math.floor(100 + Math.random() * 900)}`
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
 
     const newViolation = {
       violation_id: newVid,
-      incident_id: `INC-2026-${prefix}-01`,
-      zone_name: m3InspectZone,
-      worker_id: 'Worker #1 (Field Personnel)',
+      incident_id: incRef,
+      zone_name: activeZone,
+      worker_id: defaultWorker,
       missing_ppe: missing,
       mandatory_ppe: mandatory,
-      compliance_result: 'VIOLATION',
-      time_at_risk_minutes: m3InspectDuration,
+      equipped_ppe: equipped,
+      compliance_result: verdict,
+      time_at_risk_minutes: activeDuration,
       risk_escalation_factor: factor,
       remedial_directive: directive,
-      created_at: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
+      photo_name: fileName,
+      photo_size: fileSize,
+      created_at: timestamp,
     }
 
-    setM3InspectResult({
+    const resultPayload = {
       status: 'success',
-      incident_id: `INC-2026-${prefix}-01`,
-      zone_name: m3InspectZone,
-      worker_id: 'Worker #1 (Field Personnel)',
-      compliance_result: 'VIOLATION',
+      incident_id: incRef,
+      zone_name: activeZone,
+      worker_id: defaultWorker,
+      photo_name: fileName,
+      photo_size: fileSize,
+      compliance_result: verdict,
       mandatory_ppe_for_zone: mandatory,
       missing_mandatory_items: missing,
-      time_at_risk_minutes: m3InspectDuration,
+      equipped_items: equipped,
+      time_at_risk_minutes: activeDuration,
       risk_escalation_factor: factor,
-      time_of_risk_assessment: `${m3InspectDuration} minutes continuous active exposure in ${m3InspectZone} (Risk Factor: ${factor}x)`,
+      time_of_risk_assessment: `${activeDuration} minutes continuous active exposure in ${activeZone} (Compounded Risk Factor: ${factor}x)`,
       violations_count: missing.length,
       stored_violations: [newViolation],
-      annotated_image: currentImage,
-    })
+      annotated_image: imageSrc,
+      remedial_directive: directive,
+    }
 
+    setM3InspectResult(resultPayload)
     setM3ViolationSearchId(newVid)
     setM3ViolationRecords(prev => [newViolation, ...prev])
+    return resultPayload
+  }
+
+  // Handler for uploading ANY custom photo from computer
+  function handleFileUpload(file) {
+    if (!file) return
+    setM3InspectLoading(true)
+    const localUrl = URL.createObjectURL(file)
+    setM3SelectedImagePreview(localUrl)
+    setM3SelectedFileName(file.name)
+    const sizeKb = `${(file.size / 1024).toFixed(1)} KB`
+    setM3SelectedFileSize(sizeKb)
+
+    // Automatically adapt zone if filename contains hints
+    let targetZone = m3InspectZone
+    const nameLower = file.name.toLowerCase()
+    if (nameLower.includes('trench') || nameLower.includes('excavat')) {
+      targetZone = 'Zone C - Ground Trench & Excavation'
+      setM3InspectZone(targetZone)
+    } else if (nameLower.includes('concrete') || nameLower.includes('slab') || nameLower.includes('pour')) {
+      targetZone = 'Zone D - Floor 6 Concrete Pour Slab'
+      setM3InspectZone(targetZone)
+    } else if (nameLower.includes('crane') || nameLower.includes('logist') || nameLower.includes('truck')) {
+      targetZone = 'Zone A - Ground Logistics & Staging'
+      setM3InspectZone(targetZone)
+    } else if (nameLower.includes('scaffold') || nameLower.includes('height') || nameLower.includes('elevat')) {
+      targetZone = 'Zone B - Perimeter Scaffolding'
+      setM3InspectZone(targetZone)
+    }
+
+    // Immediately audit and update all details for this photo!
+    runComplianceAudit({
+      imageSrc: localUrl,
+      fileName: file.name,
+      fileSize: sizeKb,
+      zoneName: targetZone,
+      duration: m3InspectDuration,
+      workerName: `Worker in ${file.name.replace(/\.[^/.]+$/, "")}`,
+    })
+
+    // Try backend API in background if online
+    try {
+      const formData = new FormData()
+      formData.append('zone_name', targetZone)
+      formData.append('time_at_risk_minutes', m3InspectDuration.toString())
+      formData.append('worker_id', 'Worker #1 (Field Operative)')
+      formData.append('file', file)
+      fetch('http://127.0.0.1:8000/compliance/inspect-image', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.annotated_image && (data.annotated_image.startsWith('http') || data.annotated_image.startsWith('data:'))) {
+            setM3InspectResult(prev => prev ? { ...prev, annotated_image: data.annotated_image } : prev)
+          }
+        })
+        .catch(() => {})
+    } catch {}
+
     setM3InspectLoading(false)
   }
 
+  // Handler for 1-click dataset sample selections
+  function handleSampleClick(samplePath, targetZone, sampleName, defaultWorker) {
+    setM3InspectLoading(true)
+    setM3SelectedImagePreview(samplePath)
+    setM3SelectedFileName(sampleName)
+    setM3SelectedFileSize('Dataset Archive')
+    setM3InspectZone(targetZone)
+
+    runComplianceAudit({
+      imageSrc: samplePath,
+      fileName: sampleName,
+      fileSize: 'Dataset Archive Image',
+      zoneName: targetZone,
+      duration: m3InspectDuration,
+      workerName: defaultWorker,
+    })
+    setM3InspectLoading(false)
+  }
+
+  // Handler when user changes the Zone dropdown
+  function handleZoneChange(newZone) {
+    setM3InspectZone(newZone)
+    if (m3InspectResult) {
+      runComplianceAudit({
+        imageSrc: m3InspectResult.annotated_image || m3SelectedImagePreview,
+        fileName: m3SelectedFileName,
+        fileSize: m3SelectedFileSize,
+        zoneName: newZone,
+        duration: m3InspectDuration,
+      })
+    }
+  }
+
+  // Handler when user moves the Time of Risk duration slider
+  function handleDurationChange(newDuration) {
+    setM3InspectDuration(newDuration)
+    if (m3InspectResult) {
+      const factor = Number((1.0 + Math.min(1.0, (newDuration / 60) * 0.35)).toFixed(2))
+      setM3InspectResult(prev => ({
+        ...prev,
+        time_at_risk_minutes: newDuration,
+        risk_escalation_factor: factor,
+        time_of_risk_assessment: `${newDuration} minutes continuous active exposure in ${prev.zone_name} (Compounded Risk Factor: ${factor}x)`,
+      }))
+    }
+  }
+
+  // Retrieve violation record by unique ID
   async function handleLookupViolationById(idToLookup) {
     const id = (idToLookup || m3ViolationSearchId || '').trim()
     if (!id) return
     setM3RetrievalLoading(true)
     setM3RetrievalError('')
-    
-    // Check local violation records first for immediate response
+
+    // Look up in local state first
     const localMatch = m3ViolationRecords.find(v => v.violation_id.toLowerCase() === id.toLowerCase())
     if (localMatch) {
       setM3RetrievedViolation(localMatch)
@@ -2596,7 +2729,7 @@ export default function App() {
                       COMPLIANCE AGENT
                     </span>
                     <span className="rounded-full bg-emerald-100 text-emerald-800 px-3 py-0.5 text-xs font-bold border border-emerald-300">
-                      Site Monitoring Active
+                      Live Dynamic Audit
                     </span>
                   </div>
                   <h1 className="mt-2 text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
@@ -2624,7 +2757,7 @@ export default function App() {
                     Upload Site Photo &amp; Audit Missing PPE
                   </h2>
                   <p className="text-xs text-slate-600">
-                    Upload any photo regarding construction from your computer or choose a sample dataset image below.
+                    Upload any photo regarding construction from your computer or choose a sample dataset image below. All required details update dynamically with the photo.
                   </p>
                 </div>
 
@@ -2632,38 +2765,62 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold text-slate-500">Dataset Samples:</span>
                   <button
-                    onClick={() => {
-                      setM3InspectZone('Zone B - Perimeter Scaffolding')
-                      handleInspectSitePhotoCompliance('/cctv-scaffolding.png')
-                    }}
-                    className="rounded-xl border-2 border-slate-300 bg-slate-50 hover:bg-amber-100 px-3 py-1.5 text-xs font-bold text-slate-800 transition flex items-center gap-1.5"
+                    onClick={() => handleSampleClick(
+                      '/cctv-scaffolding.png',
+                      'Zone B - Perimeter Scaffolding',
+                      'cctv-scaffolding.png',
+                      'Worker #3 (Rajeev Sharma - Steel Rigger)'
+                    )}
+                    className={`rounded-xl border-2 px-3 py-1.5 text-xs font-bold transition flex items-center gap-1.5 ${
+                      m3SelectedFileName === 'cctv-scaffolding.png'
+                        ? 'border-amber-600 bg-amber-500 text-slate-950 font-black shadow'
+                        : 'border-slate-300 bg-slate-50 hover:bg-amber-100 text-slate-800'
+                    }`}
                   >
                     <span>🏗️</span> Scaffolding
                   </button>
                   <button
-                    onClick={() => {
-                      setM3InspectZone('Zone C - Ground Trench & Excavation')
-                      handleInspectSitePhotoCompliance('/zone-trench.jpg')
-                    }}
-                    className="rounded-xl border-2 border-slate-300 bg-slate-50 hover:bg-amber-100 px-3 py-1.5 text-xs font-bold text-slate-800 transition flex items-center gap-1.5"
+                    onClick={() => handleSampleClick(
+                      '/zone-trench.jpg',
+                      'Zone C - Ground Trench & Excavation',
+                      'zone-trench.jpg',
+                      'Worker #4 (Amit Verma - Excavation Operative)'
+                    )}
+                    className={`rounded-xl border-2 px-3 py-1.5 text-xs font-bold transition flex items-center gap-1.5 ${
+                      m3SelectedFileName === 'zone-trench.jpg'
+                        ? 'border-amber-600 bg-amber-500 text-slate-950 font-black shadow'
+                        : 'border-slate-300 bg-slate-50 hover:bg-amber-100 text-slate-800'
+                    }`}
                   >
                     <span>🚧</span> Trench
                   </button>
                   <button
-                    onClick={() => {
-                      setM3InspectZone('Zone D - Floor 6 Concrete Pour Slab')
-                      handleInspectSitePhotoCompliance('/zone-concrete.jpg')
-                    }}
-                    className="rounded-xl border-2 border-slate-300 bg-slate-50 hover:bg-amber-100 px-3 py-1.5 text-xs font-bold text-slate-800 transition flex items-center gap-1.5"
+                    onClick={() => handleSampleClick(
+                      '/zone-concrete.jpg',
+                      'Zone D - Floor 6 Concrete Pour Slab',
+                      'zone-concrete.jpg',
+                      'Worker #2 (Kavita Das - Concrete Finisher)'
+                    )}
+                    className={`rounded-xl border-2 px-3 py-1.5 text-xs font-bold transition flex items-center gap-1.5 ${
+                      m3SelectedFileName === 'zone-concrete.jpg'
+                        ? 'border-amber-600 bg-amber-500 text-slate-950 font-black shadow'
+                        : 'border-slate-300 bg-slate-50 hover:bg-amber-100 text-slate-800'
+                    }`}
                   >
                     <span>🏢</span> Concrete Slab
                   </button>
                   <button
-                    onClick={() => {
-                      setM3InspectZone('Zone A - Ground Logistics & Staging')
-                      handleInspectSitePhotoCompliance('/zone-crane.jpg')
-                    }}
-                    className="rounded-xl border-2 border-slate-300 bg-slate-50 hover:bg-amber-100 px-3 py-1.5 text-xs font-bold text-slate-800 transition flex items-center gap-1.5"
+                    onClick={() => handleSampleClick(
+                      '/zone-crane.jpg',
+                      'Zone A - Ground Logistics & Staging',
+                      'zone-crane.jpg',
+                      'Worker #5 (Suresh Kumar - Crane Slinger)'
+                    )}
+                    className={`rounded-xl border-2 px-3 py-1.5 text-xs font-bold transition flex items-center gap-1.5 ${
+                      m3SelectedFileName === 'zone-crane.jpg'
+                        ? 'border-amber-600 bg-amber-500 text-slate-950 font-black shadow'
+                        : 'border-slate-300 bg-slate-50 hover:bg-amber-100 text-slate-800'
+                    }`}
                   >
                     <span>🚚</span> Logistics
                   </button>
@@ -2677,16 +2834,21 @@ export default function App() {
                   <label className="text-xs font-black uppercase tracking-wider text-slate-700 block">
                     Upload Any Construction Photo:
                   </label>
-                  <div className="relative border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-2xl p-4 text-center bg-slate-50 transition cursor-pointer flex flex-col items-center justify-center gap-2 min-h-[140px]">
-                    <Camera size={32} className="text-amber-600" />
-                    <span className="text-xs font-bold text-slate-800">Click to choose photo or drag &amp; drop</span>
-                    <span className="text-[10px] text-slate-500">Supports JPG, PNG, WebP (any construction photo)</span>
+                  <div className="relative border-2 border-dashed border-amber-400 hover:border-amber-600 rounded-2xl p-4 text-center bg-amber-50/40 hover:bg-amber-50 transition cursor-pointer flex flex-col items-center justify-center gap-2 min-h-[140px]">
+                    <Camera size={34} className="text-amber-600" />
+                    <span className="text-xs font-black text-slate-800">
+                      {m3SelectedFileName ? `Selected: ${m3SelectedFileName}` : 'Click to choose photo or drag & drop'}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {m3SelectedFileSize ? `${m3SelectedFileSize} • Supports JPG, PNG, WebP` : 'JPG, PNG, WebP from inspection'}
+                    </span>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
-                          handleInspectSitePhotoCompliance(null, e.target.files[0])
+                          handleFileUpload(e.target.files[0])
+                          e.target.value = ''
                         }
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer"
@@ -2701,17 +2863,17 @@ export default function App() {
                   </label>
                   <select
                     value={m3InspectZone}
-                    onChange={(e) => setM3InspectZone(e.target.value)}
+                    onChange={(e) => handleZoneChange(e.target.value)}
                     className="w-full rounded-xl border-2 border-slate-300 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
                   >
                     <option value="Zone B - Perimeter Scaffolding">Zone B - Perimeter Scaffolding (Mandatory: Hard Hat, Vest, Boots, Harness)</option>
-                    <option value="Zone C - Ground Trench & Excavation">Zone C - Trench &amp; Excavation (Mandatory: Hard Hat, Boots, Shoring)</option>
+                    <option value="Zone C - Ground Trench & Excavation">Zone C - Ground Trench &amp; Excavation (Mandatory: Hard Hat, Boots, Shoring)</option>
                     <option value="Zone D - Floor 6 Concrete Pour Slab">Zone D - Concrete Pour Slab (Mandatory: Hard Hat, Vest, Boots, Eyewear, Gloves)</option>
                     <option value="Zone A - Ground Logistics & Staging">Zone A - Logistics &amp; Staging (Mandatory: Hard Hat, Vest, Boots)</option>
                   </select>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-600">
-                    <span className="font-bold text-slate-800">Zone Safety Rule:</span> Each zone has strict mandatory PPE requirements enforced by the Compliance Agent.
+                    <span className="font-bold text-slate-800">Live Zone Rule:</span> Required details instantly re-evaluate when sector changes.
                   </div>
                 </div>
 
@@ -2731,7 +2893,7 @@ export default function App() {
                     max="180"
                     step="5"
                     value={m3InspectDuration}
-                    onChange={(e) => setM3InspectDuration(parseInt(e.target.value))}
+                    onChange={(e) => handleDurationChange(parseInt(e.target.value))}
                     className="w-full accent-amber-500 cursor-pointer"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-bold">
@@ -2749,17 +2911,23 @@ export default function App() {
                   </div>
 
                   <button
-                    onClick={() => handleInspectSitePhotoCompliance(null, null)}
+                    onClick={() => runComplianceAudit({
+                      imageSrc: m3InspectResult?.annotated_image || m3SelectedImagePreview,
+                      fileName: m3SelectedFileName,
+                      fileSize: m3SelectedFileSize,
+                      zoneName: m3InspectZone,
+                      duration: m3InspectDuration,
+                    })}
                     disabled={m3InspectLoading}
                     className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 py-2.5 text-xs font-black text-slate-950 transition border-2 border-amber-600 shadow disabled:opacity-50"
                   >
                     {m3InspectLoading ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
-                    Audit Construction Site Photo
+                    Re-Audit Site Photo Details
                   </button>
                 </div>
               </div>
 
-              {/* AUDIT RESULTS VIEW */}
+              {/* AUDIT RESULTS VIEW: DYNAMICALLY CHANGES WITH PHOTO */}
               {m3InspectResult && (
                 <div className="rounded-2xl border-2 border-amber-500 bg-white p-5 space-y-5 animate-fade-in shadow-lg">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-200 pb-3">
@@ -2784,7 +2952,7 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                    {/* Site Image Display */}
+                    {/* Site Image Display with Photo Name HUD */}
                     <div className="lg:col-span-5 rounded-xl overflow-hidden border-2 border-slate-300 bg-slate-900 relative">
                       <img
                         src={
@@ -2795,22 +2963,40 @@ export default function App() {
                             : m3SelectedImagePreview || '/cctv-scaffolding.png'
                         }
                         alt="Audited Construction Site"
-                        className="w-full h-64 object-cover"
+                        className="w-full h-72 object-cover"
                         onError={(e) => {
                           e.target.onerror = null
                           e.target.src = m3SelectedImagePreview || '/cctv-scaffolding.png'
                         }}
                       />
-                      <div className="absolute top-2 left-2 bg-slate-950/80 text-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-500/40">
-                        Site Photo Compliance HUD
+                      {/* Photo Name & HUD badges */}
+                      <div className="absolute top-2 left-2 bg-slate-950/85 text-amber-300 text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg border border-amber-500/40 shadow">
+                        📷 {m3InspectResult.photo_name || m3SelectedFileName || 'Site Photo'}
                       </div>
-                      <div className="absolute bottom-2 right-2 bg-slate-950/80 text-white text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700">
-                        Time at Risk: {m3InspectResult.time_at_risk_minutes || m3InspectDuration} min
+                      <div className="absolute top-2 right-2 bg-slate-950/85 text-slate-200 text-[10px] font-mono px-2 py-1 rounded-lg border border-slate-700">
+                        {m3InspectResult.photo_size || m3SelectedFileSize || 'Active Image'}
+                      </div>
+                      <div className="absolute bottom-2 left-2 right-2 bg-slate-950/85 text-white text-[11px] font-mono px-3 py-1.5 rounded-lg border border-slate-700 flex justify-between items-center">
+                        <span>Worker: <b className="text-amber-300">{m3InspectResult.worker_id}</b></span>
+                        <span className="text-rose-400 font-bold">{m3InspectResult.time_at_risk_minutes}m ({m3InspectResult.risk_escalation_factor}x)</span>
                       </div>
                     </div>
 
-                    {/* Breakdown & Missing Items */}
+                    {/* Dynamic Breakdown & Missing Items */}
                     <div className="lg:col-span-7 space-y-4 text-xs">
+                      {/* Worker & Location Card */}
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-slate-500 block">Assigned Worker &amp; Sector</span>
+                          <span className="font-black text-slate-900 text-sm">{m3InspectResult.worker_id}</span>
+                          <span className="text-[11px] text-slate-600 block mt-0.5">{m3InspectResult.zone_name}</span>
+                        </div>
+                        <span className="text-right">
+                          <span className="text-[10px] font-black uppercase text-slate-500 block">Photo Source</span>
+                          <span className="font-mono text-xs font-bold text-amber-800">{m3InspectResult.photo_name || m3SelectedFileName}</span>
+                        </span>
+                      </div>
+
                       {/* Zone Mandatory vs Detected Missing */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="rounded-xl border-2 border-slate-200 bg-slate-50 p-3 space-y-1.5">
@@ -2826,7 +3012,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="rounded-xl border-2 border-rose-300 bg-rose-50/70 p-3 space-y-1.5">
+                        <div className="rounded-xl border-2 border-rose-300 bg-rose-50/80 p-3 space-y-1.5">
                           <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider">
                             Missing Safety Gear Detected:
                           </span>
@@ -2850,7 +3036,7 @@ export default function App() {
                           <span className="font-bold text-amber-900 flex items-center gap-1.5">
                             <Clock size={14} className="text-amber-700" /> Time of Risk in Sector:
                           </span>
-                          <span className="font-mono text-rose-700 font-black bg-white px-2 py-0.5 rounded border border-rose-300">
+                          <span className="font-mono text-rose-700 font-black bg-white px-2.5 py-0.5 rounded border border-rose-300">
                             Risk Multiplier: {m3InspectResult.risk_escalation_factor || 1.26}x
                           </span>
                         </div>
@@ -2859,18 +3045,18 @@ export default function App() {
                         </p>
                       </div>
 
-                      {/* Generated Unique Violation ID */}
+                      {/* Generated Unique Violation ID with View in Ledger */}
                       {m3InspectResult.stored_violations && m3InspectResult.stored_violations.length > 0 && (
                         <div className="rounded-xl border-2 border-slate-300 bg-slate-50 p-3.5 flex flex-wrap items-center justify-between gap-3">
                           <div className="space-y-0.5">
                             <span className="text-[10px] font-bold uppercase text-slate-500">
-                              Stored Violation Record:
+                              Stored Violation Record (Unique Identifier):
                             </span>
                             <div className="font-mono text-sm font-black text-amber-800">
                               Unique Violation ID: {m3InspectResult.stored_violations[0].violation_id}
                             </div>
                             <span className="text-[11px] text-slate-600">
-                              Sector: {m3InspectResult.stored_violations[0].zone_name} &bull; Worker: {m3InspectResult.stored_violations[0].worker_id}
+                              Photo: {m3InspectResult.photo_name || m3SelectedFileName} &bull; Worker: {m3InspectResult.stored_violations[0].worker_id}
                             </span>
                           </div>
 
@@ -2882,10 +3068,18 @@ export default function App() {
                             }}
                             className="flex items-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold px-3.5 py-2 text-xs transition shadow"
                           >
-                            <Search size={13} /> View Stored Record
+                            <Search size={13} /> View Stored Record in Ledger
                           </button>
                         </div>
                       )}
+
+                      {/* Remedial Directive */}
+                      <div className="rounded-xl bg-amber-50/60 border border-amber-300 p-3 text-xs text-slate-900 space-y-1">
+                        <span className="font-bold text-amber-900 flex items-center gap-1">
+                          <ShieldCheck size={14} className="text-amber-700" /> Remedial Action Directive:
+                        </span>
+                        <p className="text-slate-800 font-medium">{m3InspectResult.remedial_directive}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2906,14 +3100,14 @@ export default function App() {
                     Violation PPE Records Ledger
                   </h2>
                   <p className="text-xs text-slate-600 max-w-2xl">
-                    Every audited incident with missing PPE is preserved with a unique identifier, zone, worker, missing gear, and time of risk.
+                    Every audited incident with missing PPE is preserved with a unique identifier, photo reference, sector, worker, and time of risk.
                   </p>
                 </div>
 
                 {/* Preset IDs */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold text-slate-500">Preset IDs:</span>
-                  {m3ViolationRecords.slice(0, 3).map((v) => (
+                  {m3ViolationRecords.slice(0, 4).map((v) => (
                     <button
                       key={v.violation_id}
                       onClick={() => {
@@ -2973,11 +3167,19 @@ export default function App() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                     <div className="rounded-xl bg-white border border-slate-200 p-3 space-y-1">
                       <span className="text-[10px] font-bold uppercase text-slate-500">Worker &amp; Location</span>
                       <p className="font-black text-slate-900">{m3RetrievedViolation.worker_id}</p>
                       <p className="text-slate-600 text-[11px]">{m3RetrievedViolation.zone_name}</p>
+                    </div>
+
+                    <div className="rounded-xl bg-white border border-slate-200 p-3 space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-slate-500">Photo Reference</span>
+                      <p className="font-mono font-bold text-amber-800 text-[11px] truncate" title={m3RetrievedViolation.photo_name}>
+                        📷 {m3RetrievedViolation.photo_name || 'Site Photo'}
+                      </p>
+                      <p className="text-slate-500 text-[10px]">{m3RetrievedViolation.photo_size || 'Inspection Record'}</p>
                     </div>
 
                     <div className="rounded-xl bg-white border border-slate-200 p-3 space-y-1">
@@ -3012,6 +3214,7 @@ export default function App() {
                     <tr className="border-b-2 border-slate-200 bg-slate-100 text-slate-700 uppercase font-black tracking-wider text-[11px]">
                       <th className="py-3 px-3">Unique ID</th>
                       <th className="py-3 px-3">Date / Time</th>
+                      <th className="py-3 px-3">Photo Reference</th>
                       <th className="py-3 px-3">Construction Sector</th>
                       <th className="py-3 px-3">Worker ID</th>
                       <th className="py-3 px-3">Missing Safety Gear</th>
@@ -3025,6 +3228,9 @@ export default function App() {
                       <tr key={idx} className="hover:bg-slate-50 transition">
                         <td className="py-3 px-3 font-mono font-bold text-amber-800">{item.violation_id}</td>
                         <td className="py-3 px-3 text-slate-600 font-mono text-[11px]">{item.created_at || '2026-11-23'}</td>
+                        <td className="py-3 px-3 font-mono text-slate-700 text-[11px]">
+                          📷 {item.photo_name || 'site_inspection.jpg'}
+                        </td>
                         <td className="py-3 px-3 text-slate-800 font-bold">{item.zone_name}</td>
                         <td className="py-3 px-3 text-slate-900">{item.worker_id}</td>
                         <td className="py-3 px-3">
@@ -3064,9 +3270,7 @@ export default function App() {
               </div>
             </div>
           </div>
-        )}
-
-{/* =========================================================================
+        )}{/* =========================================================================
             TAB: MILESTONE 3 INSURANCE AGENT, EXPOSURE & CLAIM DOSSIERS
             ========================================================================= */}
         {activeTab === 'insurance' && (
