@@ -132,18 +132,31 @@ class ComplianceAgent:
             if any(zone_filter.lower() in z.lower() for z in item.get("applicable_zones", []))
         ]
 
+    def get_zone_mandatory_ppe(self, zone_name: str) -> List[str]:
+        """Return the combined list of all mandatory PPE items required in a given construction sector."""
+        mandatory = set()
+        for rule in self.checklist:
+            if any(zone_name.lower() in z.lower() for z in rule.get("applicable_zones", [])):
+                for ppe in rule.get("required_ppe", []):
+                    mandatory.add(ppe.lower())
+        if not mandatory:
+            mandatory = {"helmet", "vest", "boots"}
+        return sorted(list(mandatory))
+
     def evaluate_incident(
         self,
         incident_id: str,
         zone_name: str,
         missing_ppe: List[str],
         worker_id: str = "Worker #3",
+        time_at_risk_minutes: int = 45,
         raw_detections: Optional[List[Dict[str, Any]]] = None,
         tamper_simulation: bool = False,
     ) -> Dict[str, Any]:
         """
         Evaluate a flagged incident against statutory safety checklists.
-        Generates check-to-evidence audit items and detects any evidence corruption.
+        Generates check-to-evidence audit items, calculates time of risk in zone,
+        and assigns Pass/Violation/Needs Review compliance result with unique IDs.
         """
         timestamp = datetime.now(timezone.utc).isoformat()
         violations: List[Dict[str, Any]] = []
@@ -151,6 +164,14 @@ class ComplianceAgent:
         total_statutory_penalty = 0.0
         checks_evaluated = 0
         checks_passed = 0
+
+        # Calculate time of risk and risk escalation factor
+        # Exposure duration compounds risk over time in hazardous sectors
+        time_at_risk = max(1, int(time_at_risk_minutes))
+        risk_escalation_factor = round(1.0 + min(1.0, (time_at_risk / 60.0) * 0.35), 2)
+
+        # Mandatory PPE for this zone
+        zone_mandatory = self.get_zone_mandatory_ppe(zone_name)
 
         # Filter applicable checklist rules
         applicable_rules = [
@@ -184,6 +205,7 @@ class ComplianceAgent:
                 "zone_name": zone_name,
                 "worker_id": worker_id,
                 "observed_missing": list(rule_violations),
+                "time_at_risk_minutes": time_at_risk,
                 "bbox": evidence_bbox,
                 "confidence": confidence_score,
                 "timestamp": timestamp,
@@ -205,14 +227,23 @@ class ComplianceAgent:
                 penalty = rule["statutory_base_penalty"]
                 total_statutory_penalty += penalty
 
+                # Determine compliance result: PASS, VIOLATION, or NEEDS REVIEW
+                comp_result = "NEEDS_REVIEW" if confidence_score < 0.60 else "VIOLATION"
+
                 violation_record = {
                     "violation_id": f"VIO-{uuid.uuid4().hex[:8].upper()}",
                     "check_id": rule["check_id"],
+                    "incident_id": incident_id,
                     "standard": rule["standard"],
                     "title": rule["title"],
                     "severity": rule["severity_tier"],
                     "iso_clause": rule["iso_clause"],
-                    "infraction_details": f"Missing mandatory {', '.join(sorted(rule_violations)).upper()} while operating in {zone_name}.",
+                    "compliance_result": comp_result,
+                    "mandatory_ppe": sorted(list(rule_reqs)),
+                    "missing_ppe": sorted(list(rule_violations)),
+                    "time_at_risk_minutes": time_at_risk,
+                    "risk_escalation_factor": risk_escalation_factor,
+                    "infraction_details": f"Missing mandatory {', '.join(sorted(rule_violations)).upper()} while operating in {zone_name} (Active in zone for {time_at_risk} mins).",
                     "statutory_penalty_estimate": penalty,
                     "remedial_statute_action": f"Immediate equipment stop & issuance of certified {', '.join(sorted(rule_violations)).upper()}.",
                     "evidence_hash": stored_hash,
@@ -226,6 +257,7 @@ class ComplianceAgent:
                 "standard": rule["standard"],
                 "title": rule["title"],
                 "status": "VIOLATION" if is_violation else "COMPLIANT",
+                "compliance_result": "VIOLATION" if is_violation else "PASS",
                 "severity": rule["severity_tier"],
                 "evidence_timestamp": timestamp,
                 "evidence_hash": stored_hash,
@@ -236,25 +268,40 @@ class ComplianceAgent:
             })
 
         compliance_rate = (checks_passed / max(1, checks_evaluated)) * 100.0
-        overall_status = "NON_COMPLIANT" if violations else "FULLY_COMPLIANT"
+
+        # Overall verdict: PASS, VIOLATION, or NEEDS REVIEW
         if any(item["verification_status"] == "TAMPER_DETECTED" for item in audit_trail):
             overall_status = "AUDIT_INTEGRITY_COMPROMISED"
+            overall_compliance_result = "NEEDS_REVIEW"
+        elif violations:
+            overall_status = "NON_COMPLIANT"
+            overall_compliance_result = "VIOLATION"
+        else:
+            overall_status = "FULLY_COMPLIANT"
+            overall_compliance_result = "PASS"
 
         return {
             "incident_id": incident_id,
             "zone_name": zone_name,
             "worker_id": worker_id,
             "overall_status": overall_status,
+            "compliance_result": overall_compliance_result,  # PASS / VIOLATION / NEEDS REVIEW
             "compliance_rate": round(compliance_rate, 1),
             "checks_evaluated": checks_evaluated,
             "checks_passed": checks_passed,
             "violations_count": len(violations),
+            "mandatory_ppe_for_zone": zone_mandatory,
+            "missing_mandatory_items": sorted(list(missing_set)),
+            "time_at_risk_minutes": time_at_risk,
+            "risk_escalation_factor": risk_escalation_factor,
+            "time_of_risk_assessment": f"{time_at_risk} minutes continuous active exposure in {zone_name} (Risk Factor: {risk_escalation_factor}x)",
             "total_statutory_penalty_estimate": total_statutory_penalty,
             "violations": violations,
             "audit_trail": audit_trail,
             "timestamp": timestamp,
             "tamper_detected": any(item["verification_status"] == "TAMPER_DETECTED" for item in audit_trail),
         }
+
 
     def recover_corrupted_audit(
         self,

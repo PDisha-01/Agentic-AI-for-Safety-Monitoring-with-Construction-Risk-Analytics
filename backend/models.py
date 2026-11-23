@@ -165,3 +165,30 @@ class InsuranceClaimRecord(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+
+class ComplianceViolationRecord(Base):
+    __tablename__ = "compliance_violations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    violation_id: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    incident_id: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    zone_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    worker_id: Mapped[str] = mapped_column(String(100), default="Worker #1", nullable=False)
+    missing_ppe_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    mandatory_ppe_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    osha_standard: Mapped[str] = mapped_column(String(100), nullable=False)
+    iso_clause: Mapped[str] = mapped_column(String(50), default="ISO 45001:2018 Cl. 8.1.2", nullable=False)
+    severity_tier: Mapped[str] = mapped_column(String(50), default="HIGH", nullable=False)
+    compliance_result: Mapped[str] = mapped_column(String(30), default="VIOLATION", nullable=False)
+    time_at_risk_minutes: Mapped[int] = mapped_column(Integer, default=45, nullable=False)
+    risk_escalation_factor: Mapped[float] = mapped_column(Float, default=1.25, nullable=False)
+    statutory_fine_estimate: Mapped[float] = mapped_column(Float, default=16131.0, nullable=False)
+    evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    remedial_directive: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+

@@ -7,6 +7,7 @@ from backend.database import Base, SessionLocal, engine
 from backend.models import (
     AuditEvidenceRecord,
     ComplianceCheckRecord,
+    ComplianceViolationRecord,
     InsuranceClaimRecord,
     RiskAssessment,
     SafetyAlert,
@@ -230,6 +231,52 @@ def initialize_database() -> None:
                     evidence_hash="4a53cee3fb02022449b294e7e40c009d3725fe702f3954e730e284f7d6da734e",
                     verification_status="VERIFIED",
                     confidence_score=0.94,
+                    created_at=now - timedelta(hours=2),
+                )
+            )
+            session.commit()
+
+        # Seed initial realistic compliance violations with unique IDs if empty
+        first_vio = session.scalars(select(ComplianceViolationRecord)).first()
+        if not first_vio:
+            now = datetime.now(timezone.utc)
+            session.add(
+                ComplianceViolationRecord(
+                    violation_id="VIO-2026-SCAF-8910",
+                    incident_id="INC-2026-SCAF-01",
+                    zone_name="Zone B - Perimeter Scaffolding",
+                    worker_id="Worker #3 (Rajeev Sharma)",
+                    missing_ppe_json=json.dumps(["helmet"]),
+                    mandatory_ppe_json=json.dumps(["helmet", "vest", "boots", "harness"]),
+                    osha_standard="OSHA 29 CFR 1926.100(a)",
+                    iso_clause="ISO 45001:2018 Cl. 8.1.2",
+                    severity_tier="CRITICAL",
+                    compliance_result="VIOLATION",
+                    time_at_risk_minutes=45,
+                    risk_escalation_factor=1.26,
+                    statutory_fine_estimate=16131.0,
+                    evidence_hash="ec6ce21799fb992122425e10ac6dfe4c34a21074e578a1bc4908ef9812903ab1",
+                    remedial_directive="STOP ELEVATED WORK: Issue certified ANSI Z89.1 hard hat before re-entry.",
+                    created_at=now - timedelta(hours=2),
+                )
+            )
+            session.add(
+                ComplianceViolationRecord(
+                    violation_id="VIO-2026-SCAF-8911",
+                    incident_id="INC-2026-SCAF-01",
+                    zone_name="Zone B - Perimeter Scaffolding",
+                    worker_id="Worker #3 (Rajeev Sharma)",
+                    missing_ppe_json=json.dumps(["boots"]),
+                    mandatory_ppe_json=json.dumps(["helmet", "vest", "boots", "harness"]),
+                    osha_standard="OSHA 29 CFR 1926.96",
+                    iso_clause="ISO 45001:2018 Cl. 8.1.2",
+                    severity_tier="MEDIUM",
+                    compliance_result="VIOLATION",
+                    time_at_risk_minutes=45,
+                    risk_escalation_factor=1.26,
+                    statutory_fine_estimate=5800.0,
+                    evidence_hash="6d073d2f992268d5e183964cd5f251bc89445100a7395018bdfec3349182348a",
+                    remedial_directive="EQUIPMENT REMEDIATION: Replace footwear with ASTM F2413 protective boots.",
                     created_at=now - timedelta(hours=2),
                 )
             )
@@ -937,4 +984,158 @@ def get_insurance_claim_by_id(claim_id: str) -> dict | None:
             "claim_dossier_markdown": c.claim_dossier_markdown,
             "created_at": c.created_at.isoformat(),
         }
+
+
+# =========================================================================
+# Unique Violation Storage & Retrieval Services (Mentor Question 1-4)
+# =========================================================================
+
+def save_compliance_violations(
+    violations_list: list[dict],
+    incident_id: str,
+    zone_name: str,
+    worker_id: str = "Worker #1",
+    time_at_risk_minutes: int = 45,
+    risk_escalation_factor: float = 1.25,
+) -> list[dict]:
+    """Persist individual PPE violation records with unique IDs and time-at-risk."""
+    saved_records = []
+    with SessionLocal() as session:
+        for v in violations_list:
+            vio_id = v.get("violation_id") or f"VIO-{datetime.now(timezone.utc).strftime('%y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+            rec = ComplianceViolationRecord(
+                violation_id=vio_id,
+                incident_id=incident_id,
+                zone_name=zone_name,
+                worker_id=worker_id,
+                missing_ppe_json=json.dumps(v.get("missing_ppe", [])),
+                mandatory_ppe_json=json.dumps(v.get("mandatory_ppe", [])),
+                osha_standard=v.get("standard", "OSHA 29 CFR 1926.100(a)"),
+                iso_clause=v.get("iso_clause", "ISO 45001:2018 Cl. 8.1.2"),
+                severity_tier=v.get("severity", "HIGH"),
+                compliance_result=v.get("compliance_result", "VIOLATION"),
+                time_at_risk_minutes=int(v.get("time_at_risk_minutes", time_at_risk_minutes)),
+                risk_escalation_factor=float(v.get("risk_escalation_factor", risk_escalation_factor)),
+                statutory_fine_estimate=float(v.get("statutory_penalty_estimate", 16131.0)),
+                evidence_hash=v.get("evidence_hash", "0" * 64),
+                remedial_directive=v.get("remedial_statute_action", "Immediate equipment remediation required."),
+            )
+            session.add(rec)
+            session.commit()
+            session.refresh(rec)
+            saved_records.append({
+                "id": rec.id,
+                "violation_id": rec.violation_id,
+                "incident_id": rec.incident_id,
+                "zone_name": rec.zone_name,
+                "worker_id": rec.worker_id,
+                "missing_ppe": json.loads(rec.missing_ppe_json or "[]"),
+                "mandatory_ppe": json.loads(rec.mandatory_ppe_json or "[]"),
+                "osha_standard": rec.osha_standard,
+                "iso_clause": rec.iso_clause,
+                "severity_tier": rec.severity_tier,
+                "compliance_result": rec.compliance_result,
+                "time_at_risk_minutes": rec.time_at_risk_minutes,
+                "risk_escalation_factor": rec.risk_escalation_factor,
+                "statutory_fine_estimate": rec.statutory_fine_estimate,
+                "evidence_hash": rec.evidence_hash,
+                "remedial_directive": rec.remedial_directive,
+                "created_at": rec.created_at.isoformat(),
+            })
+    return saved_records
+
+
+def get_compliance_violations(limit: int = 50, zone_name: str | None = None) -> list[dict]:
+    """Retrieve all stored PPE violations."""
+    with SessionLocal() as session:
+        query = select(ComplianceViolationRecord).order_by(ComplianceViolationRecord.created_at.desc()).limit(limit)
+        if zone_name:
+            query = query.where(ComplianceViolationRecord.zone_name.ilike(f"%{zone_name}%"))
+        records = session.scalars(query).all()
+        return [
+            {
+                "id": r.id,
+                "violation_id": r.violation_id,
+                "incident_id": r.incident_id,
+                "zone_name": r.zone_name,
+                "worker_id": r.worker_id,
+                "missing_ppe": json.loads(r.missing_ppe_json or "[]"),
+                "mandatory_ppe": json.loads(r.mandatory_ppe_json or "[]"),
+                "osha_standard": r.osha_standard,
+                "iso_clause": r.iso_clause,
+                "severity_tier": r.severity_tier,
+                "compliance_result": r.compliance_result,
+                "time_at_risk_minutes": r.time_at_risk_minutes,
+                "risk_escalation_factor": r.risk_escalation_factor,
+                "statutory_fine_estimate": r.statutory_fine_estimate,
+                "evidence_hash": r.evidence_hash,
+                "remedial_directive": r.remedial_directive,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in records
+        ]
+
+
+def get_compliance_violation_by_id(violation_id: str) -> dict | None:
+    """Retrieve a single violation by its Unique ID (e.g. VIO-2026-SCAF-8910)."""
+    with SessionLocal() as session:
+        r = session.scalars(
+            select(ComplianceViolationRecord).where(
+                ComplianceViolationRecord.violation_id.ilike(violation_id.strip())
+            )
+        ).first()
+        if not r:
+            return None
+        return {
+            "id": r.id,
+            "violation_id": r.violation_id,
+            "incident_id": r.incident_id,
+            "zone_name": r.zone_name,
+            "worker_id": r.worker_id,
+            "missing_ppe": json.loads(r.missing_ppe_json or "[]"),
+            "mandatory_ppe": json.loads(r.mandatory_ppe_json or "[]"),
+            "osha_standard": r.osha_standard,
+            "iso_clause": r.iso_clause,
+            "severity_tier": r.severity_tier,
+            "compliance_result": r.compliance_result,
+            "time_at_risk_minutes": r.time_at_risk_minutes,
+            "risk_escalation_factor": r.risk_escalation_factor,
+            "statutory_fine_estimate": r.statutory_fine_estimate,
+            "evidence_hash": r.evidence_hash,
+            "remedial_directive": r.remedial_directive,
+            "created_at": r.created_at.isoformat(),
+        }
+
+
+def get_incident_violations(incident_id: str) -> list[dict]:
+    """Retrieve all violations associated with a specific incident ID."""
+    with SessionLocal() as session:
+        records = session.scalars(
+            select(ComplianceViolationRecord)
+            .where(ComplianceViolationRecord.incident_id.ilike(incident_id.strip()))
+            .order_by(ComplianceViolationRecord.created_at.asc())
+        ).all()
+        return [
+            {
+                "id": r.id,
+                "violation_id": r.violation_id,
+                "incident_id": r.incident_id,
+                "zone_name": r.zone_name,
+                "worker_id": r.worker_id,
+                "missing_ppe": json.loads(r.missing_ppe_json or "[]"),
+                "mandatory_ppe": json.loads(r.mandatory_ppe_json or "[]"),
+                "osha_standard": r.osha_standard,
+                "iso_clause": r.iso_clause,
+                "severity_tier": r.severity_tier,
+                "compliance_result": r.compliance_result,
+                "time_at_risk_minutes": r.time_at_risk_minutes,
+                "risk_escalation_factor": r.risk_escalation_factor,
+                "statutory_fine_estimate": r.statutory_fine_estimate,
+                "evidence_hash": r.evidence_hash,
+                "remedial_directive": r.remedial_directive,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in records
+        ]
+
 
